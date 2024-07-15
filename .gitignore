@@ -2,9 +2,15 @@
 .terraform/
 coverage/
 venv/
+entra-id-scim/
 env/
 .DS_STORE
 .vscode
 *.code-workspace
 *.sha256
 terraform.tfstate
+
+# identity center testing
+grant.json
+role.json
+scrap.txt

@@ -46,14 +46,14 @@ def get_access_token():
         response_data = json.loads(response.read())
         return response_data['access_token']
 
-# Get list of groups prefixed with 'aws_'
+# Get list of groups prefixed with 'aws_analytical'
 def get_aws_prefixed_groups(access_token):
     url = "https://graph.microsoft.com/v1.0/groups"
     headers = {
         'Authorization': f'Bearer {access_token}'
     }
     params = urllib.parse.urlencode({
-        '$filter': "startswith(displayName, 'aws_analytical')"
+        '$filter': "startswith(displayName, 'aws_')"
     })
 
     req = urllib.request.Request(f"{url}?{params}", headers=headers)
@@ -73,20 +73,32 @@ def get_group_members(access_token, group_id):
         response_data = json.loads(response.read())
         return response_data['value']
 
-# Get AWS Identity Center groups
+# Get AWS Identity Center groups with paginator
 def get_identity_center_groups(identity_center_client, identity_store_id):
     try:
-        response = identity_center_client.list_groups(IdentityStoreId=identity_store_id)
-        return {group['DisplayName']: group['GroupId'] for group in response['Groups']}
+        paginator = identity_center_client.get_paginator('list_groups')
+        page_iterator = paginator.paginate(IdentityStoreId=identity_store_id)
+        groups = {}
+        for page in page_iterator:
+            for group in page['Groups']:
+                groups[group['DisplayName']] = group['GroupId']
+        logger.info(f"Identity Center groups: {groups}")
+        return groups
     except ClientError as e:
         logger.error(f"Error listing Identity Center groups: {e}")
         raise e
 
-# Get AWS Identity Center users
+# Get AWS Identity Center users with paginator
 def get_identity_center_users(identity_center_client, identity_store_id):
     try:
-        response = identity_center_client.list_users(IdentityStoreId=identity_store_id)
-        return {user['UserName']: user['UserId'] for user in response['Users']}
+        paginator = identity_center_client.get_paginator('list_users')
+        page_iterator = paginator.paginate(IdentityStoreId=identity_store_id)
+        users = set()  # Use a set for fast membership testing
+        for page in page_iterator:
+            for user in page['Users']:
+                users.add(user['UserName'])  # Add usernames to the set
+        logger.info(f"Identity Center usernames: {users}")
+        return users
     except ClientError as e:
         logger.error(f"Error listing Identity Center users: {e}")
         raise e
@@ -112,8 +124,6 @@ def lambda_handler(event, context):
         # Get existing Identity Center groups and users
         ic_groups = get_identity_center_groups(identity_center_client, identity_store_id)
         ic_users = get_identity_center_users(identity_center_client, identity_store_id)
-        # print(ic_users)
-        print(len(ic_users))
 
         # Get members of each group
         for group in groups:
@@ -133,12 +143,22 @@ def lambda_handler(event, context):
                 member_name = member['userPrincipalName']
                 member_given_name = member['givenName']
                 member_surname = member['surname']
+
+                # Log user details for troubleshooting
+                logger.info(f"Processing member: {member_name}, GivenName: {member_given_name}, Surname: {member_surname}")
+
                 if member_name not in ic_users:
                     if dry_run:
                         logger.info(f"[Dry Run] Would create user '{member_name}', '{member_given_name}' in AWS Identity Center.")
                     else:
-                        user_response = identity_center_client.create_user(IdentityStoreId=identity_store_id, UserName=member_name, DisplayName=member_name, Name={'FamilyName':member_surname, 'GivenName':member_given_name}, Emails=[{'Value':member_name, 'Type':'Work','Primary':True}])
-                        ic_users[member_name] = user_response['UserId']
+                        user_response = identity_center_client.create_user(
+                            IdentityStoreId=identity_store_id,
+                            UserName=member_name,
+                            DisplayName=member_name,
+                            Name={'FamilyName': member_surname, 'GivenName': member_given_name},
+                            Emails=[{'Value': member_name, 'Type': 'EntraId', 'Primary': True}]
+                        )
+                        ic_users.add(member_name)  # Add newly created username to the set
                         logger.info(f"Created user '{member_name}', '{member_surname}' in AWS Identity Center.")
 
                 membership_data = {
@@ -149,7 +169,6 @@ def lambda_handler(event, context):
                 }
                 all_members.append(membership_data)
 
-
                 # Check if user is already a member of the group
                 if dry_run:
                     logger.info(f"[Dry Run] Would add user '{member_name}' to group '{group_name}' in AWS Identity Center.")
@@ -157,7 +176,11 @@ def lambda_handler(event, context):
                 #     try:
                 #         group_id = ic_groups[group_name]
                 #         user_id = ic_users[member_name]
-                #         identity_center_client.create_group_membership(IdentityStoreId=IDENTITY_STORE_ID, GroupId=group_id, MemberId=user_id)
+                #         identity_center_client.create_group_membership(
+                #             IdentityStoreId=IDENTITY_STORE_ID,
+                #             GroupId=group_id,
+                #             MemberId=user_id
+                #         )
                 #         logger.info(f"Added user '{member_name}' to group '{group_name}' in AWS Identity Center.")
                 #     except ClientError as e:
                 #         if e.response['Error']['Code'] == 'EntityAlreadyExistsException':

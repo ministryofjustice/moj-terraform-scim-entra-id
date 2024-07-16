@@ -112,7 +112,8 @@ def lambda_handler(event, context):
         # Get existing Identity Center groups and users
         ic_groups = get_identity_center_groups(identity_center_client, identity_store_id)
         ic_users = get_identity_center_users(identity_center_client, identity_store_id)
-        print(ic_users)
+        # print(ic_users)
+        print(len(ic_users))
 
         # Get members of each group
         for group in groups:
@@ -136,7 +137,7 @@ def lambda_handler(event, context):
                     if dry_run:
                         logger.info(f"[Dry Run] Would create user '{member_name}', '{member_given_name}' in AWS Identity Center.")
                     else:
-                        user_response = identity_center_client.create_user(IdentityStoreId=identity_store_id, UserName=member_name, DisplayName=member_name, Name={'FamilyName':member_surname, 'GivenName':member_given_name})
+                        user_response = identity_center_client.create_user(IdentityStoreId=identity_store_id, UserName=member_name, DisplayName=member_name, Name={'FamilyName':member_surname, 'GivenName':member_given_name}, Emails=[{'Value':member_name, 'Type':'Work','Primary':True}])
                         ic_users[member_name] = user_response['UserId']
                         logger.info(f"Created user '{member_name}', '{member_surname}' in AWS Identity Center.")
 

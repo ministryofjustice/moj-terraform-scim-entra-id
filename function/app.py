@@ -1,8 +1,7 @@
 import os
 import json
 import logging
-import urllib.request
-import urllib.parse
+import requests
 import boto3
 from botocore.exceptions import ClientError
 import sys
@@ -17,7 +16,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-# Initialize environment variables
+# Initialise environment variables
 TENANT_ID = os.environ.get('AZURE_TENANT_ID')
 CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')
 CLIENT_SECRET = os.environ.get('AZURE_CLIENT_SECRET')
@@ -45,21 +44,18 @@ def get_access_token():
         str: Access token.
     """
     url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
-    headers = {
-        'Content-Type': 'application/x-www-form-urlencoded'
-    }
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     data = {
         'grant_type': 'client_credentials',
         'client_id': CLIENT_ID,
         'client_secret': CLIENT_SECRET,
         'scope': 'https://graph.microsoft.com/.default'
     }
-    data_encoded = urllib.parse.urlencode(data).encode('utf-8')
 
-    req = urllib.request.Request(url, data=data_encoded, headers=headers)
-    with urllib.request.urlopen(req) as response:
-        response_data = json.loads(response.read())
-        return response_data['access_token']
+    response = requests.post(url, headers=headers, data=data)
+    response.raise_for_status()  # Raises an error for bad responses
+    response_data = response.json()
+    return response_data['access_token']
 
 # Get list of groups prefixed with 'aws_analytical'
 def get_aws_prefixed_groups(access_token):
@@ -73,17 +69,13 @@ def get_aws_prefixed_groups(access_token):
         list: List of groups.
     """
     url = "https://graph.microsoft.com/v1.0/groups"
-    headers = {
-        'Authorization': f'Bearer {access_token}'
-    }
-    params = urllib.parse.urlencode({
-        '$filter': "startswith(displayName, 'aws_analytical')"
-    })
+    headers = {'Authorization': f'Bearer {access_token}'}
+    params = {'$filter': "startswith(displayName, 'aws_analytical')"}
 
-    req = urllib.request.Request(f"{url}?{params}", headers=headers)
-    with urllib.request.urlopen(req) as response:
-        response_data = json.loads(response.read())
-        return response_data['value']
+    response = requests.get(url, headers=headers, params=params)
+    response.raise_for_status()
+    response_data = response.json()
+    return response_data['value']
 
 # Get members of a specific group
 def get_group_members(access_token, group_id):
@@ -98,14 +90,12 @@ def get_group_members(access_token, group_id):
         list: List of group members.
     """
     url = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members"
-    headers = {
-        'Authorization': f'Bearer {access_token}'
-    }
+    headers = {'Authorization': f'Bearer {access_token}'}
 
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req) as response:
-        response_data = json.loads(response.read())
-        return response_data['value']
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    response_data = response.json()
+    return response_data['value']
 
 # Get AWS Identity Center groups with paginator
 def get_identity_center_groups(identity_center_client, identity_store_id):
@@ -297,6 +287,6 @@ def lambda_handler(event, context):
 
 if __name__ == "__main__":
     # This is for local testing
-    event = {"dry_run": False}
+    event = {"dry_run": True}
     context = None
     lambda_handler(event, context)

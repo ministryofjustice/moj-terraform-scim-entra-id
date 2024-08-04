@@ -36,7 +36,7 @@ def get_identity_store_id(sso_client):
     return response['Instances'][0]['IdentityStoreId']
 
 # Get Azure AD token
-def get_access_token():
+def get_azure_access_token():
     """
     Fetches an OAuth 2.0 token from Azure AD using client credentials.
 
@@ -58,7 +58,7 @@ def get_access_token():
     return response_data['access_token']
 
 # Get list of groups prefixed with 'aws_analytical'
-def get_aws_prefixed_groups(access_token):
+def get_entraid_aws_groups(access_token):
     """
     Retrieves Azure AD groups with names prefixed with 'aws_analytical'.
 
@@ -78,7 +78,7 @@ def get_aws_prefixed_groups(access_token):
     return response_data['value']
 
 # Get members of a specific group
-def get_group_members(access_token, group_id):
+def get_entraid_group_members(access_token, group_id):
     """
     Retrieves members of a specific Azure AD group.
 
@@ -148,7 +148,7 @@ def get_identity_center_users(identity_center_client, identity_store_id):
         raise e
 
 # Get the user ID from the username
-def get_user_id(identity_center_client, identity_store_id, username):
+def get_identity_center_user_id(identity_center_client, identity_store_id, username):
     """
     Retrieves the user ID for a given username from AWS Identity Center.
 
@@ -193,11 +193,11 @@ def lambda_handler(event, context):
     identity_store_id = get_identity_store_id(sso_client)
 
     try:
-        access_token = get_access_token()
+        access_token = get_azure_access_token()
         logger.info("Successfully obtained access token")
 
         # Get aws_ prefixed groups
-        groups = get_aws_prefixed_groups(access_token)
+        groups = get_entraid_aws_groups(access_token)
         logger.info(f"Found {len(groups)} groups prefixed with 'aws_analytical'")
 
         all_members = []
@@ -210,7 +210,7 @@ def lambda_handler(event, context):
         for group in groups:
             group_id = group['id']
             group_name = group['displayName']
-            members = get_group_members(access_token, group_id)
+            members = get_entraid_group_members(access_token, group_id)
 
             if group_name not in ic_groups:
                 if dry_run:
@@ -255,7 +255,7 @@ def lambda_handler(event, context):
                 else:
                     try:
                         group_id = ic_groups[group_name]
-                        user_id = get_user_id(identity_center_client, identity_store_id, member_name)
+                        user_id = get_identity_center_user_id(identity_center_client, identity_store_id, member_name)
                         if user_id:
                             identity_center_client.create_group_membership(
                                 IdentityStoreId=identity_store_id,

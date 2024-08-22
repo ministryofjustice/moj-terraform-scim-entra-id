@@ -16,33 +16,20 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-# Initialise environment variables
+# Initialize environment variables
 TENANT_ID = os.environ.get('AZURE_TENANT_ID')
 CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')
 CLIENT_SECRET = os.environ.get('AZURE_CLIENT_SECRET')
 
-# Get IdentityStore ID
+# Cache for storing user and group data
+user_cache = {}
+group_members_cache = {}
+
 def get_identity_store_id(sso_client):
-    """
-    Retrieves the Identity Store ID from the AWS SSO client.
-
-    Args:
-        sso_client: Boto3 SSO client.
-
-    Returns:
-        str: Identity Store ID.
-    """
     response = sso_client.list_instances()
     return response['Instances'][0]['IdentityStoreId']
 
-# Get Azure AD token
 def get_azure_access_token():
-    """
-    Fetches an OAuth 2.0 token from Azure AD using client credentials.
-
-    Returns:
-        str: Access token.
-    """
     url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     data = {
@@ -53,69 +40,40 @@ def get_azure_access_token():
     }
 
     response = requests.post(url, headers=headers, data=data)
-    response.raise_for_status()  # Raises an error for bad responses
-    response_data = response.json()
-    return response_data['access_token']
+    response.raise_for_status()
+    return response.json()['access_token']
 
-# Get list of groups prefixed with 'entraid-aws-identitycenter-'
 def get_entraid_aws_groups(access_token):
-    """
-    Retrieves Azure AD groups with names prefixed with 'entraid-aws-identitycenter-'.
-
-    Args:
-        access_token (str): Azure AD access token.
-
-    Returns:
-        list: List of groups.
-    """
     url = "https://graph.microsoft.com/v1.0/groups"
     headers = {'Authorization': f'Bearer {access_token}'}
     params = {'$filter': "startswith(displayName, 'entraid-aws-identitycenter-')"}
 
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
-    response_data = response.json()
-    return response_data['value']
+    return response.json()['value']
 
-# Get members of a specific group
 def get_entraid_group_members(access_token, group_id):
-    """
-    Retrieves members of a specific Azure AD group.
+    if group_id in group_members_cache:
+        return group_members_cache[group_id]
 
-    Args:
-        access_token (str): Azure AD access token.
-        group_id (str): Group ID.
-
-    Returns:
-        list: List of group members.
-    """
     url = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members"
     headers = {'Authorization': f'Bearer {access_token}'}
 
     response = requests.get(url, headers=headers)
     response.raise_for_status()
-    response_data = response.json()
-    return response_data['value']
+    members = response.json()['value']
 
-# Get AWS Identity Center groups and their memberships
-def get_identity_center_groups_and_members(identity_center_client, identity_store_id, group_name_prefix=""):
-    """
-    Retrieves AWS Identity Center groups and their memberships using a paginator.
+    group_members_cache[group_id] = members
+    return members
 
-    Args:
-        identity_center_client: Boto3 Identity Store client.
-        identity_store_id (str): Identity Store ID.
-        group_name_prefix (str): Prefix to filter group names by.
-
-    Returns:
-        dict: Dictionary mapping group display names to their details and memberships (usernames).
-    """
+def get_identity_center_groups_and_relevant_users(identity_center_client, identity_store_id, group_name_prefix=""):
     try:
+        logger.info("Fetching AWS Identity Center groups and their memberships...")
         groups = {}
-        paginator = identity_center_client.get_paginator('list_groups')
-        page_iterator = paginator.paginate(IdentityStoreId=identity_store_id)
+        relevant_users = set()
 
-        for page in page_iterator:
+        paginator = identity_center_client.get_paginator('list_groups')
+        for page in paginator.paginate(IdentityStoreId=identity_store_id):
             for group in page['Groups']:
                 if group_name_prefix == "" or group['DisplayName'].startswith(group_name_prefix):
                     groups[group['DisplayName']] = {
@@ -124,57 +82,144 @@ def get_identity_center_groups_and_members(identity_center_client, identity_stor
                     }
 
         for group_name, group_info in groups.items():
+            logger.info(f"Fetching members for group: {group_name}")
             paginator = identity_center_client.get_paginator('list_group_memberships')
-            page_iterator = paginator.paginate(IdentityStoreId=identity_store_id, GroupId=group_info['GroupId'])
-
-            for page in page_iterator:
+            for page in paginator.paginate(IdentityStoreId=identity_store_id, GroupId=group_info['GroupId']):
                 for membership in page['GroupMemberships']:
                     user_id = membership['MemberId']['UserId']
-                    # Fetch the username for each user and add it to the members set
                     username = get_identity_center_username(identity_center_client, identity_store_id, user_id)
                     if username:
                         group_info['Members'].add(username)
+                        relevant_users.add(user_id)
 
         logger.info(f"Number of Identity Center groups retrieved with prefix '{group_name_prefix}': {len(groups)}")
-        return groups
+        return groups, relevant_users
     except ClientError as e:
         logger.error(f"Error listing Identity Center groups and memberships: {e}")
         raise e
 
 def get_identity_center_username(identity_center_client, identity_store_id, user_id):
-    """
-    Retrieves the username for a given user ID from AWS Identity Center.
+    if user_id in user_cache:
+        return user_cache[user_id]
 
-    Args:
-        identity_center_client: Boto3 Identity Store client.
-        identity_store_id (str): Identity Store ID.
-        user_id (str): User ID.
-
-    Returns:
-        str: Username or None if the user is not found.
-    """
     try:
+        logger.info(f"Fetching username for user ID: {user_id}")
         response = identity_center_client.describe_user(
             IdentityStoreId=identity_store_id,
             UserId=user_id
         )
-        return response.get('UserName')
+        username = response.get('UserName')
+        if username:
+            user_cache[user_id] = username
+        return username
     except ClientError as e:
         logger.error(f"Error getting username for user ID {user_id}: {e}")
         return None
 
+def get_group_membership_id(identity_center_client, identity_store_id, group_id, user_id):
+    try:
+        logger.info(f"Fetching membership ID for user {user_id} in group {group_id}")
+        paginator = identity_center_client.get_paginator('list_group_memberships')
+        for page in paginator.paginate(IdentityStoreId=identity_store_id, GroupId=group_id):
+            for membership in page['GroupMemberships']:
+                if membership['MemberId']['UserId'] == user_id:
+                    return membership['MembershipId']
+    except ClientError as e:
+        logger.error(f"Error getting membership ID for user ID {user_id} in group ID {group_id}: {e}")
+    return None
+
+def delete_unused_groups(identity_center_client, identity_store_id, aws_groups, azure_groups, dry_run=True):
+    azure_group_names = set(group['displayName'] for group in azure_groups)
+    for group_name in list(aws_groups.keys()):
+        if group_name not in azure_group_names:
+            if dry_run:
+                logger.info(f"[Dry Run] Would delete group '{group_name}' from AWS Identity Center.")
+            else:
+                group_id = aws_groups[group_name]['GroupId']
+                try:
+                    logger.info(f"Deleting group '{group_name}' from AWS Identity Center.")
+                    identity_center_client.delete_group(IdentityStoreId=identity_store_id, GroupId=group_id)
+                    del aws_groups[group_name]
+                except ClientError as e:
+                    logger.error(f"Error deleting group {group_name}: {e}")
+
+def remove_users_not_in_azure(access_token, identity_center_client, identity_store_id, aws_groups, azure_groups, dry_run=True):
+    for group in azure_groups:
+        group_name = group['displayName']
+        if group_name in aws_groups:
+            azure_member_names = {member['userPrincipalName'] for member in get_entraid_group_members(access_token, group['id'])}
+            aws_member_names = aws_groups[group_name]['Members']
+            members_to_remove = aws_member_names - azure_member_names
+
+            for username in members_to_remove:
+                user_id = get_identity_center_user_id_by_username(identity_center_client, identity_store_id, username)
+                if user_id:
+                    membership_id = get_group_membership_id(identity_center_client, identity_store_id, aws_groups[group_name]['GroupId'], user_id)
+                    if membership_id:
+                        if dry_run:
+                            logger.info(f"[Dry Run] Would remove user '{username}' from group '{group_name}' in AWS Identity Center.")
+                        else:
+                            try:
+                                logger.info(f"Removing user '{username}' from group '{group_name}' in AWS Identity Center.")
+                                identity_center_client.delete_group_membership(
+                                    IdentityStoreId=identity_store_id,
+                                    MembershipId=membership_id
+                                )
+                                aws_groups[group_name]['Members'].remove(username)
+                            except ClientError as e:
+                                logger.error(f"Error removing user '{username}' from group '{group_name}': {e}")
+
+def get_identity_center_user_id_by_username(identity_center_client, identity_store_id, username):
+    if username in user_cache:
+        return user_cache[username]
+
+    try:
+        logger.info(f"Fetching user ID for username: {username}")
+        response = identity_center_client.list_users(
+            IdentityStoreId=identity_store_id,
+            Filters=[{'AttributePath': 'UserName', 'AttributeValue': username}]
+        )
+        if response['Users']:
+            user_id = response['Users'][0]['UserId']
+            user_cache[username] = user_id
+            return user_id
+    except ClientError as e:
+        logger.error(f"Error getting user ID for username {username}: {e}")
+    return None
+
+def delete_unused_users(identity_center_client, identity_store_id, aws_groups, relevant_users, dry_run=True):
+    logger.info("Listing all relevant users in AWS Identity Center...")
+
+    # Create a set of all users who are members of entraid-aws-identitycenter- prefixed groups
+    all_group_members = set()
+    for group in aws_groups.values():
+        all_group_members.update(group['Members'])
+
+    # Iterate over all relevant users
+    for user_id in relevant_users:
+        try:
+            user_info = identity_center_client.describe_user(
+                IdentityStoreId=identity_store_id,
+                UserId=user_id
+            )
+            username = user_info['UserName']
+
+            # Only consider deletion if the user is not a member of any entraid-prefixed group
+            if username not in all_group_members:
+                if any(email['Type'] == 'EntraId' and email['Primary'] for email in user_info['Emails']):
+                    if dry_run:
+                        logger.info(f"[Dry Run] Would delete user '{username}' from AWS Identity Center.")
+                    else:
+                        logger.info(f"Deleting user '{username}' from AWS Identity Center.")
+                        identity_center_client.delete_user(
+                            IdentityStoreId=identity_store_id,
+                            UserId=user_id
+                        )
+        except ClientError as e:
+            logger.error(f"Error deleting user '{user_id}': {e}")
+
 # Lambda handler function
 def lambda_handler(event, context):
-    """
-    Main Lambda function handler.
-
-    Args:
-        event (dict): Event data passed to the function.
-        context (object): Runtime information.
-
-    Returns:
-        dict: Response containing status code and body with the results.
-    """
     dry_run = event.get('dry_run', True)
     sso_client = boto3.client('sso-admin', region_name='eu-west-2')
     identity_center_client = boto3.client('identitystore', region_name='eu-west-2')
@@ -182,58 +227,74 @@ def lambda_handler(event, context):
     identity_store_id = get_identity_store_id(sso_client)
 
     try:
+        logger.info("Starting the sync process...")
         access_token = get_azure_access_token()
         logger.info("Successfully obtained access token")
 
         # Get entraid-aws-identitycenter- prefixed groups
-        groups = get_entraid_aws_groups(access_token)
-        logger.info(f"Found {len(groups)} groups prefixed with 'entraid-aws-identitycenter-'")
-
-        all_members = []
+        azure_groups = get_entraid_aws_groups(access_token)
+        logger.info(f"Found {len(azure_groups)} groups prefixed with 'entraid-aws-identitycenter-'")
 
         # Get existing Identity Center groups, users, and their memberships
-        ic_groups = get_identity_center_groups_and_members(identity_center_client, identity_store_id, "entraid-aws-identitycenter-")
+        aws_groups, relevant_users = get_identity_center_groups_and_relevant_users(identity_center_client, identity_store_id, "entraid-aws-identitycenter-")
 
-        # Process each group
-        for group in groups:
-            group_id = group['id']
+        # 1. Delete groups in AWS Identity Center that no longer exist in Azure AD
+        delete_unused_groups(identity_center_client, identity_store_id, aws_groups, azure_groups, dry_run=dry_run)
+
+        # 2. Remove users from AWS Identity Center groups if they no longer exist in Azure AD groups
+        remove_users_not_in_azure(access_token, identity_center_client, identity_store_id, aws_groups, azure_groups, dry_run=dry_run)
+
+        # 3. Add/Sync groups and users between Azure AD and AWS Identity Center
+        for group in azure_groups:
             group_name = group['displayName']
+            group_id = group['id']
             members = get_entraid_group_members(access_token, group_id)
 
-            if group_name not in ic_groups:
+            if group_name not in aws_groups:
                 if dry_run:
                     logger.info(f"[Dry Run] Would create group '{group_name}' in AWS Identity Center.")
+                    aws_groups[group_name] = {
+                        'GroupId': f"dry_run_dummy_'{group_name}'",
+                        'Members': set()
+                    }
                 else:
                     response = identity_center_client.create_group(IdentityStoreId=identity_store_id, DisplayName=group_name)
-                    ic_groups[group_name] = {
+                    aws_groups[group_name] = {
                         'GroupId': response['GroupId'],
                         'Members': set()
                     }
                     logger.info(f"Created group '{group_name}' in AWS Identity Center.")
 
-            # Process each member in the group
+            # Sync members
+            group_info = aws_groups[group_name]
             for member in members:
                 member_name = member['userPrincipalName']
                 member_given_name = member['givenName']
                 member_surname = member['surname']
 
-                # Log user details for troubleshooting
                 logger.info(f"Processing member: {member_name}, GivenName: {member_given_name}, Surname: {member_surname}")
 
-                # Check if the user is already a member of the group before adding
-                group_info = ic_groups[group_name]
                 if member_name not in group_info['Members']:
                     if dry_run:
                         logger.info(f"[Dry Run] Would add user '{member_name}' to group '{group_name}' in AWS Identity Center.")
                     else:
                         try:
                             # Create the user if not existing
-                            user_response = identity_center_client.create_user(
+                            user_id = get_identity_center_user_id_by_username(identity_center_client, identity_store_id, member_name)
+                            if not user_id:
+                                user_response = identity_center_client.create_user(
+                                    IdentityStoreId=identity_store_id,
+                                    UserName=member_name,
+                                    DisplayName=member_name,
+                                    Name={'FamilyName': member_surname, 'GivenName': member_given_name},
+                                    Emails=[{'Value': member_name, 'Type': 'EntraId', 'Primary': True}]
+                                )
+                                user_id = user_response['UserId']
+                            # Add the user to the group
+                            identity_center_client.create_group_membership(
                                 IdentityStoreId=identity_store_id,
-                                UserName=member_name,
-                                DisplayName=member_name,
-                                Name={'FamilyName': member_surname, 'GivenName': member_given_name},
-                                Emails=[{'Value': member_name, 'Type': 'EntraId', 'Primary': True}]
+                                GroupId=group_info['GroupId'],
+                                MemberId={'UserId': user_id}
                             )
                             group_info['Members'].add(member_name)
                             logger.info(f"Added user '{member_name}' to group '{group_name}' in AWS Identity Center.")
@@ -243,18 +304,13 @@ def lambda_handler(event, context):
                             else:
                                 raise e
 
-                # Example membership data structure
-                membership_data = {
-                    'group': group_name,
-                    'member_id': member['id'],
-                    'member_name': member_name,
-                    'member_email': member.get('mail', member_name)
-                }
-                all_members.append(membership_data)
+        # 4. Delete users who are not members of any entraid-aws-identitycenter- groups and have the specific email type
+        delete_unused_users(identity_center_client, identity_store_id, aws_groups, relevant_users, dry_run=dry_run)
 
+        logger.info("Sync process completed.")
         return {
             'statusCode': 200,
-            'body': json.dumps(all_members)
+            'body': json.dumps({"status": "Completed"})
         }
 
     except Exception as e:

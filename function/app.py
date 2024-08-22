@@ -56,15 +56,25 @@ def get_entraid_group_members(access_token, group_id):
     if group_id in group_members_cache:
         return group_members_cache[group_id]
 
-    url = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members"
     headers = {'Authorization': f'Bearer {access_token}'}
 
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
-    members = response.json()['value']
+    # Fetch members
+    url_members = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members"
+    response_members = requests.get(url_members, headers=headers)
+    response_members.raise_for_status()
+    members = response_members.json()['value']
 
-    group_members_cache[group_id] = members
-    return members
+    # Fetch admins
+    url_admins = f"https://graph.microsoft.com/v1.0/groups/{group_id}/owners"
+    response_admins = requests.get(url_admins, headers=headers)
+    response_admins.raise_for_status()
+    admins = response_admins.json()['value']
+
+    # Combine members and admins
+    combined_members = members + admins
+
+    group_members_cache[group_id] = combined_members
+    return combined_members
 
 def get_identity_center_groups_and_relevant_users(identity_center_client, identity_store_id, group_name_prefix=""):
     try:
@@ -265,7 +275,7 @@ def lambda_handler(event, context):
                     }
                     logger.info(f"Created group '{group_name}' in AWS Identity Center.")
 
-            # Sync members
+            # Sync members (including admins)
             group_info = aws_groups[group_name]
             for member in members:
                 member_name = member['userPrincipalName']
@@ -329,3 +339,4 @@ if __name__ == "__main__":
     event = {"dry_run": True}
     context = None
     lambda_handler(event, context)
+

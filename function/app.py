@@ -7,19 +7,28 @@ from botocore.exceptions import ClientError
 import sys
 import traceback
 
+# Initialize environment variables
+
+TENANT_ID = os.environ.get('AZURE_TENANT_ID')
+CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')
+CLIENT_SECRET = os.environ.get('AZURE_CLIENT_SECRET')
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+
 # Set up logging
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger.setLevel(LOG_LEVEL)
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-# Initialize environment variables
-TENANT_ID = os.environ.get('AZURE_TENANT_ID')
-CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')
-CLIENT_SECRET = os.environ.get('AZURE_CLIENT_SECRET')
+# Checking for missing envvars
+required_env_vars = ['AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET']
+for var in required_env_vars:
+    if not os.environ.get(var):
+        logger.error(f"Environment variable '{var}' is required but not set.")
+        raise EnvironmentError(f"Missing required environment variable: {var}")
 
 # Cache for storing user and group data
 user_cache = {}
@@ -131,7 +140,7 @@ def get_identity_center_user_id_by_username(identity_center_client, identity_sto
         return user_cache[username]
 
     try:
-        logger.info(f"Fetching user ID for username: {username}")
+        logger.debug(f"Fetching user ID for username: {username}")
         response = identity_center_client.list_users(
             IdentityStoreId=identity_store_id,
             Filters=[{'AttributePath': 'UserName', 'AttributeValue': username}]
@@ -191,13 +200,13 @@ def sync_group_members(identity_center_client, identity_store_id, group_info, me
         member_given_name = member['givenName']
         member_surname = member['surname']
 
-        logger.info(f"Processing member: {member_name}, GivenName: {member_given_name}, Surname: {member_surname}")
+        logger.debug(f"Processing member: {member_name}, GivenName: {member_given_name}, Surname: {member_surname}")
 
         # Check if the user exists
         user_id = get_identity_center_user_id_by_username(identity_center_client, identity_store_id, member_name)
 
         if user_id:
-            logger.info(f"User '{member_name}' already exists with UserId '{user_id}' in AWS Identity Center.")
+            logger.debug(f"User '{member_name}' already exists with UserId '{user_id}' in AWS Identity Center.")
         else:
             if dry_run:
                 logger.info(f"[Dry Run] Would create a new user '{member_name}' in AWS Identity Center.")

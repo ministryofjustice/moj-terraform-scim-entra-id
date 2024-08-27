@@ -12,7 +12,12 @@ import traceback
 TENANT_ID = os.environ.get('AZURE_TENANT_ID')
 CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')
 CLIENT_SECRET = os.environ.get('AZURE_CLIENT_SECRET')
-LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
+
+# Non-environment functions
+
+GROUP_PREFIX = "aws-sso-"
+
 
 # Set up logging
 logger = logging.getLogger()
@@ -55,7 +60,7 @@ def get_azure_access_token():
 def get_entraid_aws_groups(access_token):
     url = "https://graph.microsoft.com/v1.0/groups"
     headers = {'Authorization': f'Bearer {access_token}'}
-    params = {'$filter': "startswith(displayName, 'entraid-aws-identitycenter-')"}
+    params = {'$filter': "startswith(displayName, '{GROUP_PREFIX}')"}
 
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
@@ -87,7 +92,7 @@ def get_entraid_group_members(access_token, group_id):
 
 def get_identity_center_groups_and_relevant_users(identity_center_client, identity_store_id, group_name_prefix=""):
     try:
-        logger.debug("Fetching AWS Identity Center groups and their memberships...")
+        logger.info("Fetching AWS Identity Center groups and their memberships...")
         groups = {}
         relevant_users = set()
 
@@ -122,7 +127,7 @@ def get_identity_center_username(identity_center_client, identity_store_id, user
         return user_cache[user_id]
 
     try:
-        logger.debug(f"Fetching username for user ID: {user_id}")
+        logger.info(f"Fetching username for user ID: {user_id}")
         response = identity_center_client.describe_user(
             IdentityStoreId=identity_store_id,
             UserId=user_id
@@ -140,7 +145,7 @@ def get_identity_center_user_id_by_username(identity_center_client, identity_sto
         return user_cache[username]
 
     try:
-        logger.debug(f"Fetching user ID for username: {username}")
+        logger.info(f"Fetching user ID for username: {username}")
         response = identity_center_client.list_users(
             IdentityStoreId=identity_store_id,
             Filters=[{'AttributePath': 'UserName', 'AttributeValue': username}]
@@ -200,13 +205,13 @@ def sync_group_members(identity_center_client, identity_store_id, group_info, me
         member_given_name = member['givenName']
         member_surname = member['surname']
 
-        logger.debug(f"Processing member: {member_name}, GivenName: {member_given_name}, Surname: {member_surname}")
+        logger.info(f"Processing member: {member_name}, GivenName: {member_given_name}, Surname: {member_surname}")
 
         # Check if the user exists
         user_id = get_identity_center_user_id_by_username(identity_center_client, identity_store_id, member_name)
 
         if user_id:
-            logger.debug(f"User '{member_name}' already exists with UserId '{user_id}' in AWS Identity Center.")
+            logger.info(f"User '{member_name}' already exists with UserId '{user_id}' in AWS Identity Center.")
         else:
             if dry_run:
                 logger.info(f"[Dry Run] Would create a new user '{member_name}' in AWS Identity Center.")
@@ -288,9 +293,9 @@ def remove_obsolete_users(identity_center_client, identity_store_id, aws_groups,
                                 logger.error(f"Error removing user '{username}' from group '{group_name}': {e}")
 
 def delete_unused_users(identity_center_client, identity_store_id, aws_groups, relevant_users, dry_run):
-    logger.debug("Listing all relevant users in AWS Identity Center...")
+    logger.info("Listing all relevant users in AWS Identity Center...")
 
-    # Create a set of all users who are members of entraid-aws-identitycenter- prefixed groups
+    # Create a set of all users who are members of GROUP_PREFIX prefixed groups
     all_group_members = set()
     for group in aws_groups.values():
         all_group_members.update(group['Members'])
@@ -328,14 +333,14 @@ def lambda_handler(event, context):
     try:
         logger.info("Starting the sync process...")
         access_token = get_azure_access_token()
-        logger.debug("Successfully obtained access token")
+        logger.info("Successfully obtained access token")
 
-        # Get entraid-aws-identitycenter- prefixed groups
+        # Get GROUP_PREFIX prefixed groups
         azure_groups = get_entraid_aws_groups(access_token)
-        logger.info(f"Found {len(azure_groups)} groups prefixed with 'entraid-aws-identitycenter-'")
+        logger.info(f"Found {len(azure_groups)} groups prefixed with '{GROUP_PREFIX}'")
 
         # Get existing Identity Center groups, users, and their memberships
-        aws_groups, relevant_users = get_identity_center_groups_and_relevant_users(identity_center_client, identity_store_id, "entraid-aws-identitycenter-")
+        aws_groups, relevant_users = get_identity_center_groups_and_relevant_users(identity_center_client, identity_store_id, GROUP_PREFIX)
 
         # 1. Add/Sync groups and users between Azure AD and AWS Identity Center
         azure_group_members = sync_azure_groups_with_aws(identity_center_client, identity_store_id, aws_groups, azure_groups, dry_run)
@@ -346,7 +351,7 @@ def lambda_handler(event, context):
         # 3. Remove users from AWS Identity Center groups if they no longer exist in Azure AD groups
         remove_obsolete_users(identity_center_client, identity_store_id, aws_groups, azure_group_members, dry_run=dry_run)
 
-        # 4. Delete users who are not members of any entraid-aws-identitycenter- groups and have the specific email type
+        # 4. Delete users who are not members of any GROUP_PREFIX groups and have the specific email type
         delete_unused_users(identity_center_client, identity_store_id, aws_groups, relevant_users, dry_run=dry_run)
 
         logger.info("Sync process completed.")

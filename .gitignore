@@ -14,3 +14,8 @@ terraform.tfstate
 grant.json
 role.json
 scrap.txt
+
+# Python
+**/**__pycache__
+venv/
+entra-id-scim/

@@ -191,36 +191,51 @@ def sync_group_members(identity_center_client, identity_store_id, group_info, me
         member_given_name = member['givenName']
         member_surname = member['surname']
 
-        logger.debug(f"Processing member: {member_name}, GivenName: {member_given_name}, Surname: {member_surname}")
+        logger.info(f"Processing member: {member_name}, GivenName: {member_given_name}, Surname: {member_surname}")
 
+        # Check if the user exists
+        user_id = get_identity_center_user_id_by_username(identity_center_client, identity_store_id, member_name)
+
+        if user_id:
+            logger.info(f"User '{member_name}' already exists with UserId '{user_id}' in AWS Identity Center.")
+        else:
+            if dry_run:
+                logger.info(f"[Dry Run] Would create a new user '{member_name}' in AWS Identity Center.")
+            else:
+                try:
+                    logger.info(f"Creating a new user '{member_name}' in AWS Identity Center.")
+                    user_response = identity_center_client.create_user(
+                        IdentityStoreId=identity_store_id,
+                        UserName=member_name,
+                        DisplayName=member_name,
+                        Name={'FamilyName': member_surname, 'GivenName': member_given_name},
+                        Emails=[{'Value': member_name, 'Type': 'EntraId', 'Primary': True}]
+                    )
+                    user_id = user_response['UserId']
+                    logger.info(f"Successfully created new user '{member_name}' with UserId '{user_id}' in AWS Identity Center.")
+                except ClientError as e:
+                    logger.error(f"Failed to create user '{member_name}' in AWS Identity Center: {e}")
+                    raise e
+
+        # Add the user to the group if they are not already a member
         if member_name not in group_info['Members']:
             if dry_run:
                 logger.info(f"[Dry Run] Would add user '{member_name}' to group '{group_name}' in AWS Identity Center.")
             else:
                 try:
-                    # Create the user if not existing
-                    user_id = get_identity_center_user_id_by_username(identity_center_client, identity_store_id, member_name)
-                    if not user_id:
-                        user_response = identity_center_client.create_user(
-                            IdentityStoreId=identity_store_id,
-                            UserName=member_name,
-                            DisplayName=member_name,
-                            Name={'FamilyName': member_surname, 'GivenName': member_given_name},
-                            Emails=[{'Value': member_name, 'Type': 'EntraId', 'Primary': True}]
-                        )
-                        user_id = user_response['UserId']
-                    # Add the user to the group
+                    logger.info(f"Adding user '{member_name}' to group '{group_name}' in AWS Identity Center.")
                     identity_center_client.create_group_membership(
                         IdentityStoreId=identity_store_id,
                         GroupId=group_info['GroupId'],
                         MemberId={'UserId': user_id}
                     )
                     group_info['Members'].add(member_name)
-                    logger.info(f"Added user '{member_name}' to group '{group_name}' in AWS Identity Center.")
+                    logger.info(f"Successfully added user '{member_name}' to group '{group_name}' in AWS Identity Center.")
                 except ClientError as e:
                     if e.response['Error']['Code'] == 'EntityAlreadyExistsException':
                         logger.info(f"User '{member_name}' is already a member of group '{group_name}'.")
                     else:
+                        logger.error(f"Failed to add user '{member_name}' to group '{group_name}': {e}")
                         raise e
 
 def remove_obsolete_groups(identity_center_client, identity_store_id, aws_groups, azure_groups, dry_run):

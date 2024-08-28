@@ -3,8 +3,8 @@ from unittest.mock import patch, MagicMock
 from botocore.exceptions import ClientError
 from function.app import (
     sync_group_members,
-    remove_obsolete_users,
-    delete_unused_users
+    remove_members_not_in_azure_groups,
+    delete_orphaned_aws_users
 )
 
 class TestMemberSync(unittest.TestCase):
@@ -125,7 +125,7 @@ class TestMemberSync(unittest.TestCase):
         aws_groups = {'group1': {'GroupId': 'mocked_group_id', 'Members': {'user1@example.com'}}}
         azure_group_members = {'group1': [{'userPrincipalName': 'user2@example.com'}]}
 
-        remove_obsolete_users(identity_center_client, 'mocked_identity_store_id', aws_groups, azure_group_members, dry_run=False)
+        remove_members_not_in_azure_groups(identity_center_client, 'mocked_identity_store_id', aws_groups, azure_group_members, dry_run=False)
 
         # Assert that delete_group_membership was called
         identity_center_client.delete_group_membership.assert_called_once_with(
@@ -147,7 +147,7 @@ class TestMemberSync(unittest.TestCase):
         aws_groups = {'group1': {'Members': set()}}
         relevant_users = {'mocked_user_id'}
 
-        delete_unused_users(identity_center_client, 'mocked_identity_store_id', aws_groups, relevant_users, dry_run=False)
+        delete_orphaned_aws_users(identity_center_client, 'mocked_identity_store_id', aws_groups, relevant_users, dry_run=False)
 
         identity_center_client.delete_user.assert_called_once()
 

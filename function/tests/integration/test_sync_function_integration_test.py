@@ -1,8 +1,10 @@
 import os
 import unittest
-from unittest.mock import patch, MagicMock
-from moto import mock_aws
+from unittest.mock import MagicMock, patch
+
 import requests_mock
+from moto import mock_aws
+
 from function.app import lambda_handler
 
 

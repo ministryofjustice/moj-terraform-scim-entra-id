@@ -1,11 +1,12 @@
-import os
 import json
 import logging
-import requests
-import boto3
-from botocore.exceptions import ClientError
+import os
 import sys
 import traceback
+
+import boto3
+import requests
+from botocore.exceptions import ClientError
 
 # Initialize environment variables
 TENANT_ID = os.environ.get("AZURE_TENANT_ID")

@@ -1,10 +1,8 @@
 import unittest
-from unittest.mock import patch, MagicMock
-from function.app import (
-    get_azure_access_token,
-    get_entraid_aws_groups,
-    get_entraid_group_members,
-)
+from unittest.mock import MagicMock, patch
+
+from function.app import (get_azure_access_token, get_entraid_aws_groups,
+                          get_entraid_group_members)
 
 
 class TestAzureFunctions(unittest.TestCase):

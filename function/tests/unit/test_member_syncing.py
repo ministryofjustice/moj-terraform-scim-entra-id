@@ -1,11 +1,11 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from botocore.exceptions import ClientError
-from function.app import (
-    sync_group_members,
-    remove_members_not_in_azure_groups,
-    delete_orphaned_aws_users,
-)
+
+from function.app import (delete_orphaned_aws_users,
+                          remove_members_not_in_azure_groups,
+                          sync_group_members)
 
 
 class TestMemberSync(unittest.TestCase):

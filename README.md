@@ -19,7 +19,7 @@ The repository comes with the following preset files:
 
 Once you've created your repository using this template, ensure the following steps:
 
-### Update README
+### Update readme
 
 Edit this README.md file to document your project accurately. Take the time to create a clear, engaging, and informative README.md file. Include information like what your project does, how to install and run it, how to contribute, and any other pertinent details.
 
@@ -43,11 +43,11 @@ Please read and understand these standards thoroughly and enable them when you f
 
 ### Modify the GitHub Standards Badge
 
-Once you've ensured that all the [GitHub Repository Standards](https://user-guide.operations-engineering.service.justice.gov.uk/documentation/information/mojrepostandards.html) have been applied to your repository, it's time to update the Ministry of Justice (MoJ) Compliance Badge located in the README file.
+Once you've ensured that all the [GitHub Repository Standards](https://user-guide.operations-engineering.service.justice.gov.uk/documentation/information/mojrepostandards.html) have been applied to your repository, it's time to update the Ministry of Justice (MoJ) Compliance Badge located in the readme file.
 
 The badge demonstrates that your repository is compliant with MoJ's standards. Please follow these [instructions](https://user-guide.operations-engineering.service.justice.gov.uk/documentation/information/add-repo-badge.html) to modify the badge URL to reflect the status of your repository correctly.
 
-**Please note** the badge will not function correctly if your repository is internal or private. In this case, you may remove the badge from your README.
+**Please note** the badge will not function correctly if your repository is internal or private. In this case, you may remove the badge from your readme.
 
 ### Manage Outside Collaborators
 

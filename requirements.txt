@@ -3,7 +3,3 @@ boto3==1.28.57           # AWS SDK for Python to interact with AWS services
 botocore==1.31.57        # Low-level, data-driven core of boto3
 requests==2.31.0         # To make HTTP requests to EntraID
 
-# Development and Testing Dependencies
-flake8==6.1.0            # Linting tool to ensure code style compliance
-unittest2==1.1.0         # Extended version of unittest
-mock==5.1.0              # Mocking library for testing

@@ -162,9 +162,7 @@ class TestLambdaFunction(unittest.TestCase):
                 return mock_list_groups_paginator
             if paginator_name == "list_group_memberships":
                 return mock_list_group_memberships_paginator
-            else:
-                # Return a default mock for other paginators
-                return MagicMock()
+            return MagicMock()
 
         # Assign the side effect to the mock's get_paginator method
         identity_center_client.get_paginator.side_effect = get_paginator_side_effect
@@ -182,8 +180,7 @@ class TestLambdaFunction(unittest.TestCase):
                         }
                     ],
                 }
-            else:
-                return None
+            return None
 
         identity_center_client.describe_user.side_effect = describe_user_side_effect
 

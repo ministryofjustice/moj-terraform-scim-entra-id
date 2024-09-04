@@ -82,7 +82,9 @@ class TestLambdaFunction(unittest.TestCase):
             "GroupId": "mocked_group_id"
         }
 
-        def list_users_side_effect(IdentityStoreId, Filters):
+        def list_users_side_effect(
+            IdentityStoreId, Filters
+        ):  # pylint: disable=W0613,C103
             username = next(
                 filter["AttributeValue"]
                 for filter in Filters
@@ -168,7 +170,9 @@ class TestLambdaFunction(unittest.TestCase):
         identity_center_client.get_paginator.side_effect = get_paginator_side_effect
         # Mock Describe User
 
-        def describe_user_side_effect(IdentityStoreId, UserId):
+        def describe_user_side_effect(
+            IdentityStoreId, UserId
+        ):  # pylint: disable=W0613,C103
             if UserId in self.user_id_to_username:
                 return {
                     "UserName": self.user_id_to_username[UserId],

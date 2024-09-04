@@ -2,8 +2,12 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from botocore.exceptions import ClientError
-from function.app import (get_group_membership_id,
-                          get_identity_center_username, get_identity_store_id)
+
+from function.app import (
+    get_group_membership_id,
+    get_identity_center_username,
+    get_identity_store_id,
+)
 
 
 class TestAWSFunctions(unittest.TestCase):

@@ -9,6 +9,14 @@ from function.app import (
 
 
 class TestAzureFunctions(unittest.TestCase):
+    """
+    Unit tests for Azure-related functions in the AWS Identity Center integration.
+
+    This test suite covers scenarios for obtaining an Azure access token, retrieving Azure AD groups,
+    and fetching group members. It uses mocking to simulate HTTP requests and responses
+    to Azure's API endpoints.
+    """
+
     @patch("function.app.requests.post")
     def test_get_azure_access_token(self, mock_post):
         # Mock the Azure token response

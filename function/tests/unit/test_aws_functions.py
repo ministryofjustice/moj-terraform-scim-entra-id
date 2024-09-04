@@ -11,6 +11,14 @@ from function.app import (
 
 
 class TestAWSFunctions(unittest.TestCase):
+    """
+    Unit tests for AWS-related functions in the AWS Identity Center integration.
+
+    This test suite covers scenarios for retrieving the AWS Identity Store ID, fetching
+    the username associated with a user ID, and obtaining the membership ID for a user
+    in a specific group. It uses mocking to simulate interactions with AWS services.
+    """
+
     @patch("function.app.boto3.client")
     def test_get_identity_store_id(self, mock_boto_client):
         sso_client = MagicMock()

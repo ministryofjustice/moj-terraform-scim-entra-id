@@ -11,6 +11,14 @@ from function.app import (
 
 
 class TestMemberSync(unittest.TestCase):
+    """
+    Unit tests for member synchronization functions in the AWS Identity Center and Azure AD integration.
+
+    This test suite covers various scenarios for syncing group members, removing obsolete users,
+    and handling exceptions during user management operations. It uses mocking to simulate
+    interactions with AWS services.
+    """
+
     @patch("function.app.get_identity_center_user_id_by_username")
     @patch("function.app.boto3.client")
     def test_sync_group_members_user_already_exists(

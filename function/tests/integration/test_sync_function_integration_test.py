@@ -201,7 +201,8 @@ class TestLambdaFunction(unittest.TestCase):
             IdentityStoreId=self.mock_identity_store_id, MembershipId="membership3"
         )
         print(
-            "Assertion Passed: One user ['extra_user@example.com'] is deleted from Identity Center group ['azure-aws-sso-group1']"
+            "Assertion Passed: One user ['extra_user@example.com'] is deleted"
+            + "from Identity Center group ['azure-aws-sso-group1']"
         )
 
         # One user ['extra_user@example.com'] is deleted

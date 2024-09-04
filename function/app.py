@@ -512,7 +512,8 @@ def remove_members_not_in_azure_groups(
                     if membership_id:
                         if dry_run:
                             logger.info(
-                                f"[Dry Run] Would remove user '{username}' from group '{group_name}' in AWS Identity Center."
+                                f"[Dry Run] Would remove user '{username}' from group "
+                                f"'{group_name}' in AWS Identity Center."
                             )
                         else:
                             try:
@@ -525,7 +526,8 @@ def remove_members_not_in_azure_groups(
                                 )
                                 aws_groups[group_name]["Members"].remove(username)
                                 logger.info(
-                                    f"Successfully removed user '{username}' from group '{group_name}' in AWS Identity Center."
+                                    f"Successfully removed user '{username}' from group "
+                                    f"'{group_name}' in AWS Identity Center."
                                 )
                             except ClientError as e:
                                 logger.error(

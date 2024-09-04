@@ -29,7 +29,7 @@ logger.addHandler(handler)
 required_env_vars = ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"]
 for var in required_env_vars:
     if not os.environ.get(var):
-        logger.error(f"Environment variable '{var}' is required but not set.")
+        logger.error("Environment variable '%s' is required but not set.", var)
         raise EnvironmentError(f"Missing required environment variable: {var}")
 
 # Cache for storing user and group data
@@ -157,7 +157,7 @@ def get_identity_center_groups_and_relevant_users(
                     }
 
         for group_name, group_info in groups.items():
-            logger.info(f"Fetching members for group: {group_name}")
+            logger.info("Fetching members for group: %s", group_name)
             paginator = identity_center_client.get_paginator("list_group_memberships")
             for page in paginator.paginate(
                 IdentityStoreId=identity_store_id, GroupId=group_info["GroupId"]
@@ -172,11 +172,13 @@ def get_identity_center_groups_and_relevant_users(
                         relevant_users.add(user_id)
 
         logger.info(
-            f"Number of Identity Center groups retrieved with prefix '{group_name_prefix}': {len(groups)}"
+            "Number of Identity Center groups retrieved with prefix '%s': %d",
+            group_name_prefix,
+            len(groups),
         )
         return groups, relevant_users
     except ClientError as e:
-        logger.error(f"Error listing Identity Center groups and memberships: {e}")
+        logger.error("Error listing Identity Center groups and memberships: %s", e)
         raise e
 
 
@@ -196,7 +198,7 @@ def get_identity_center_username(identity_center_client, identity_store_id, user
         return user_cache[user_id]
 
     try:
-        logger.debug(f"Fetching username for user ID: {user_id}")
+        logger.debug("Fetching username for user ID: %s", user_id)
         response = identity_center_client.describe_user(
             IdentityStoreId=identity_store_id, UserId=user_id
         )
@@ -205,7 +207,7 @@ def get_identity_center_username(identity_center_client, identity_store_id, user
             user_cache[user_id] = username
         return username
     except ClientError as e:
-        logger.error(f"Error getting username for user ID {user_id}: {e}")
+        logger.error("Error getting username for user ID %s: %s", user_id, e)
         return None
 
 
@@ -227,7 +229,7 @@ def get_identity_center_user_id_by_username(
         return user_cache[username]
 
     try:
-        logger.debug(f"Fetching user ID for username: {username}")
+        logger.debug("Fetching user ID for username: %s", username)
         response = identity_center_client.list_users(
             IdentityStoreId=identity_store_id,
             Filters=[{"AttributePath": "UserName", "AttributeValue": username}],
@@ -237,7 +239,7 @@ def get_identity_center_user_id_by_username(
             user_cache[username] = user_id
             return user_id
     except ClientError as e:
-        logger.error(f"Error getting user ID for username {username}: {e}")
+        logger.error("Error getting user ID for username %s: %s", username, e)
     return None
 
 
@@ -257,7 +259,7 @@ def get_group_membership_id(
         str: Membership ID or None if not found.
     """
     try:
-        logger.info(f"Fetching membership ID for user {user_id} in group {group_id}")
+        logger.info("Fetching membership ID for user %s in group %s", user_id, group_id)
         paginator = identity_center_client.get_paginator("list_group_memberships")
         for page in paginator.paginate(
             IdentityStoreId=identity_store_id, GroupId=group_id
@@ -267,7 +269,7 @@ def get_group_membership_id(
                     return membership["MembershipId"]
     except ClientError as e:
         logger.error(
-            f"Error getting membership ID for user ID {user_id} in group ID {group_id}: {e}"
+            "Error getting membership ID for user ID %s in group ID %s: %s", user_id, group_id, e
         )
     return None
 
@@ -299,7 +301,8 @@ def sync_azure_groups_with_aws(
         if group_name not in aws_groups:
             if dry_run:
                 logger.info(
-                    f"[Dry Run] Would create group '{group_name}' in AWS Identity Center."
+                    "[Dry Run] Would create group '%s' in AWS Identity Center.",
+                    group_name,
                 )
                 aws_groups[group_name] = {
                     "GroupId": f"dry_run_dummy_'{group_name}'",
@@ -313,7 +316,7 @@ def sync_azure_groups_with_aws(
                     "GroupId": response["GroupId"],
                     "Members": set(),
                 }
-                logger.info(f"Created group '{group_name}' in AWS Identity Center.")
+                logger.info("Created group '%s' in AWS Identity Center.", group_name)
 
         # Sync members
         sync_group_members(
@@ -348,7 +351,7 @@ def sync_group_members(
         member_surname = member["surname"]
 
         logger.debug(
-            f"Processing member: {member_name}, GivenName: {member_given_name}, Surname: {member_surname}"
+            "Processing member: %s, GivenName: %s, Surname: %s", member_name, member_given_name, member_surname
         )
 
         # Check if the user exists
@@ -358,17 +361,20 @@ def sync_group_members(
 
         if user_id:
             logger.debug(
-                f"User '{member_name}' already exists with UserId '{user_id}' in AWS Identity Center."
+                "User '%s' already exists with UserId '%s' in AWS Identity Center.",
+                member_name,
+                user_id,
             )
         else:
             if dry_run:
                 logger.info(
-                    f"[Dry Run] Would create a new user '{member_name}' in AWS Identity Center."
+                    "[Dry Run] Would create a new user '%s' in AWS Identity Center.",
+                    member_name,
                 )
             else:
                 try:
                     logger.info(
-                        f"Creating a new user '{member_name}' in AWS Identity Center."
+                        "Creating a new user '%s' in AWS Identity Center.", member_name
                     )
                     user_response = identity_center_client.create_user(
                         IdentityStoreId=identity_store_id,
@@ -384,11 +390,13 @@ def sync_group_members(
                     )
                     user_id = user_response["UserId"]
                     logger.info(
-                        f"Successfully created new user '{member_name}' with UserId '{user_id}' in AWS Identity Center."
+                        "Successfully created new user '%s' with UserId '%s' in AWS Identity Center.",
+                        member_name,
+                        user_id,
                     )
                 except ClientError as e:
                     logger.error(
-                        f"Failed to create user '{member_name}' in AWS Identity Center: {e}"
+                        "Failed to create user '%s' in AWS Identity Center: %s", member_name, e
                     )
                     raise e
 
@@ -396,12 +404,16 @@ def sync_group_members(
         if member_name not in group_info["Members"]:
             if dry_run:
                 logger.info(
-                    f"[Dry Run] Would add user '{member_name}' to group '{group_name}' in AWS Identity Center."
+                    "[Dry Run] Would add user '%s' to group '%s' in AWS Identity Center.",
+                    member_name,
+                    group_name,
                 )
             else:
                 try:
                     logger.info(
-                        f"Adding user '{member_name}' to group '{group_name}' in AWS Identity Center."
+                        "Adding user '%s' to group '%s' in AWS Identity Center.",
+                        member_name,
+                        group_name,
                     )
                     identity_center_client.create_group_membership(
                         IdentityStoreId=identity_store_id,
@@ -410,16 +422,18 @@ def sync_group_members(
                     )
                     group_info["Members"].add(member_name)
                     logger.info(
-                        f"Successfully added user '{member_name}' to group '{group_name}' in AWS Identity Center."
+                        "Successfully added user '%s' to group '%s' in AWS Identity Center.",
+                        member_name,
+                        group_name,
                     )
                 except ClientError as e:
                     if e.response["Error"]["Code"] == "EntityAlreadyExistsException":
                         logger.info(
-                            f"User '{member_name}' is already a member of group '{group_name}'."
+                            "User '%s' is already a member of group '%s'.", member_name, group_name
                         )
                     else:
                         logger.error(
-                            f"Failed to add user '{member_name}' to group '{group_name}': {e}"
+                            "Failed to add user '%s' to group '%s': %s", member_name, group_name, e
                         )
                         raise e
 
@@ -442,7 +456,7 @@ def remove_obsolete_groups(
         if group_name not in azure_group_names:
             if dry_run:
                 logger.info(
-                    f"[Dry Run] Would delete group '{group_name}' from AWS Identity Center."
+                    "[Dry Run] Would delete group '%s' from AWS Identity Center.", group_name
                 )
                 group_id = aws_groups[group_name]["GroupId"]
                 del aws_groups[group_name]
@@ -450,14 +464,14 @@ def remove_obsolete_groups(
                 group_id = aws_groups[group_name]["GroupId"]
                 try:
                     logger.info(
-                        f"Deleting group '{group_name}' from AWS Identity Center."
+                        "Deleting group '%s' from AWS Identity Center.", group_name
                     )
                     identity_center_client.delete_group(
                         IdentityStoreId=identity_store_id, GroupId=group_id
                     )
                     del aws_groups[group_name]
                 except ClientError as e:
-                    logger.error(f"Error deleting group {group_name}: {e}")
+                    logger.error("Error deleting group %s: %s", group_name, e)
 
 
 def remove_members_not_in_azure_groups(
@@ -476,25 +490,25 @@ def remove_members_not_in_azure_groups(
     logger.info("Starting to remove users not in Azure groups...")
 
     for group_name, members in azure_group_members.items():
-        logger.info(f"Processing group: {group_name}")
+        logger.info("Processing group: %s", group_name)
 
         if group_name in aws_groups:
             azure_member_names = {member["userPrincipalName"] for member in members}
             aws_member_names = aws_groups[group_name]["Members"]
 
             logger.debug(
-                f"Azure members for group '{group_name}': {azure_member_names}"
+                "Azure members for group '%s': %s", group_name, azure_member_names
             )
-            logger.debug(f"AWS members for group '{group_name}': {aws_member_names}")
+            logger.debug("AWS members for group '%s': %s", group_name, aws_member_names)
 
             members_to_remove = aws_member_names - azure_member_names
 
             if members_to_remove:
                 logger.debug(
-                    f"Members to remove from group '{group_name}': {members_to_remove}"
+                    "Members to remove from group '%s': %s", group_name, members_to_remove
                 )
             else:
-                logger.debug(f"No members to remove from group '{group_name}'.")
+                logger.debug("No members to remove from group '%s'.", group_name)
 
             for username in members_to_remove:
                 user_id = get_identity_center_user_id_by_username(
@@ -512,13 +526,16 @@ def remove_members_not_in_azure_groups(
                     if membership_id:
                         if dry_run:
                             logger.info(
-                                f"[Dry Run] Would remove user '{username}' from group "
-                                f"'{group_name}' in AWS Identity Center."
+                                "[Dry Run] Would remove user '%s' from group '%s' in AWS Identity Center.",
+                                username,
+                                group_name,
                             )
                         else:
                             try:
                                 logger.info(
-                                    f"Removing user '{username}' from group '{group_name}' in AWS Identity Center."
+                                    "Removing user '%s' from group '%s' in AWS Identity Center.",
+                                    username,
+                                    group_name,
                                 )
                                 identity_center_client.delete_group_membership(
                                     IdentityStoreId=identity_store_id,
@@ -526,22 +543,23 @@ def remove_members_not_in_azure_groups(
                                 )
                                 aws_groups[group_name]["Members"].remove(username)
                                 logger.info(
-                                    f"Successfully removed user '{username}' from group "
-                                    f"'{group_name}' in AWS Identity Center."
+                                    "Successfully removed user '%s' from group '%s' in AWS Identity Center.",
+                                    username,
+                                    group_name,
                                 )
                             except ClientError as e:
                                 logger.error(
-                                    f"Error removing user '{username}' from group '{group_name}': {e}"
+                                    "Error removing user '%s' from group '%s': %s", username, group_name, e
                                 )
                     else:
                         logger.warning(
-                            f"No membership ID found for user '{username}' in group '{group_name}'."
+                            "No membership ID found for user '%s' in group '%s'.", username, group_name
                         )
                 else:
-                    logger.warning(f"No user ID found for username '{username}'.")
+                    logger.warning("No user ID found for username '%s'.", username)
         else:
             logger.warning(
-                f"Group '{group_name}' not found in AWS Identity Center groups."
+                "Group '%s' not found in AWS Identity Center groups.", group_name
             )
 
     logger.info("Completed removal of users not in Azure groups.")
@@ -577,8 +595,8 @@ def delete_orphaned_aws_users(
             username = user_info["UserName"]
 
             # Log user details for debugging
-            logger.debug(f"Processing user: {username} with ID: {user_id}")
-            logger.debug(f"User's group membership: {username in all_group_members}")
+            logger.debug("Processing user: %s with ID: %s", username, user_id)
+            logger.debug("User's group membership: %s", username in all_group_members)
 
             # Only consider deletion if the user is not a member of any GROUP_PREFIX prefixed group
             if username not in all_group_members:
@@ -587,31 +605,33 @@ def delete_orphaned_aws_users(
                     for email in user_info["Emails"]
                 )
                 logger.debug(
-                    f"User {username} has a matching EntraId primary email: {email_matches}"
+                    "User %s has a matching EntraId primary email: %s", username, email_matches
                 )
 
                 if email_matches:
                     if dry_run:
                         logger.info(
-                            f"[Dry Run] Would delete user '{username}' from AWS Identity Center."
+                            "[Dry Run] Would delete user '%s' from AWS Identity Center.", username
                         )
                     else:
                         logger.info(
-                            f"Deleting user '{username}' from AWS Identity Center."
+                            "Deleting user '%s' from AWS Identity Center.", username
                         )
                         identity_center_client.delete_user(
                             IdentityStoreId=identity_store_id, UserId=user_id
                         )
                 else:
                     logger.debug(
-                        f"Skipping deletion for user '{username}' because their email does not match criteria."
+                        "Skipping deletion for user '%s' because their email does not match criteria.",
+                        username,
                     )
             else:
                 logger.debug(
-                    f"Skipping deletion for user '{username}' because they are a member of a group."
+                    "Skipping deletion for user '%s' because they are a member of a group.",
+                    username,
                 )
         except ClientError as e:
-            logger.error(f"Error deleting user '{user_id}': {e}")
+            logger.error("Error deleting user '%s': %s", user_id, e)
 
 
 def lambda_handler(event, context):
@@ -638,7 +658,7 @@ def lambda_handler(event, context):
 
         # Get GROUP_PREFIX prefixed groups
         azure_groups = get_entraid_aws_groups(access_token)
-        logger.info(f"Found {len(azure_groups)} groups prefixed with '{GROUP_PREFIX}'")
+        logger.info("Found %d groups prefixed with '%s'", len(azure_groups), GROUP_PREFIX)
 
         # Get existing Identity Center groups, users, and their memberships
         aws_groups, relevant_users = get_identity_center_groups_and_relevant_users(
@@ -681,7 +701,7 @@ def lambda_handler(event, context):
         return {"statusCode": 200, "body": json.dumps({"status": "Completed"})}
 
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
+        logger.error("Error: %s", str(e))
         logger.error(traceback.format_exc())
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
     finally:

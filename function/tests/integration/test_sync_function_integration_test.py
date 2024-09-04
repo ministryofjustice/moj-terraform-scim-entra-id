@@ -9,6 +9,14 @@ from function.app import lambda_handler
 
 
 class TestLambdaFunction(unittest.TestCase):
+    """
+    Unit tests for the AWS Lambda function handling Azure AD and AWS Identity Center integration.
+
+    This test suite mocks various AWS and Azure services to simulate scenarios where users and groups
+    are synchronized between Azure AD and AWS Identity Center. It verifies the correct execution
+    of the lambda function logic, including user deletion, group deletion, and no-op scenarios.
+    """
+
     def setUp(self):
         self.mock_tenant_id = os.environ.get("AZURE_TENANT_ID", "mock_tenant_id")
         self.mock_access_token_url = (

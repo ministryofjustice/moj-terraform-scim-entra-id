@@ -336,7 +336,7 @@ def sync_azure_groups_with_aws(
 
 def sync_group_members(
     identity_center_client, identity_store_id, group_info, members, group_name, dry_run
-):
+):  # pylint: disable=R0913
     """
     Sync members of a specific Azure AD group with AWS Identity Center.
 
@@ -490,7 +490,7 @@ def remove_obsolete_groups(
 
 def remove_members_not_in_azure_groups(
     identity_center_client, identity_store_id, aws_groups, azure_group_members, dry_run
-):
+):  # pylint: disable=R0912
     """
     Remove users from AWS Identity Center groups if they no longer exist in Azure AD groups.
 
@@ -503,7 +503,7 @@ def remove_members_not_in_azure_groups(
     """
     logger.info("Starting to remove users not in Azure groups...")
 
-    for group_name, members in azure_group_members.items():
+    for group_name, members in azure_group_members.items():  # pylint: disable=R1702
         logger.info("Processing group: %s", group_name)
 
         if group_name in aws_groups:
@@ -658,7 +658,7 @@ def delete_orphaned_aws_users(
             logger.error("Error deleting user '%s': %s", user_id, e)
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, context):  # pylint: disable=W0621,W0613
     """
     Main handler function for the AWS Lambda function.
 
@@ -726,17 +726,17 @@ def lambda_handler(event, context):
         logger.info("Sync process completed.")
         return {"statusCode": 200, "body": json.dumps({"status": "Completed"})}
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=W0718
         logger.error("Error: %s", str(e))
         logger.error(traceback.format_exc())
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
     finally:
-        for handler in logger.handlers:
+        for handler in logger.handlers:  # pylint: disable=W0621
             handler.flush()
 
 
 if __name__ == "__main__":
     # This is for local testing
     event = {"dry_run": True}
-    context = None
+    context = None  # pylint: disable=C0103
     lambda_handler(event, context)

@@ -7,6 +7,7 @@ from function.app import (
     get_entraid_group_members,
 )
 
+
 class TestAzureFunctions(unittest.TestCase):
     @patch("function.app.requests.post")
     def test_get_azure_access_token(self, mock_post):

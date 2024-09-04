@@ -1,6 +1,5 @@
 import unittest
 from unittest.mock import MagicMock, patch
-
 from function.app import (
     get_azure_access_token,
     get_entraid_aws_groups,

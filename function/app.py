@@ -269,7 +269,10 @@ def get_group_membership_id(
                     return membership["MembershipId"]
     except ClientError as e:
         logger.error(
-            "Error getting membership ID for user ID %s in group ID %s: %s", user_id, group_id, e
+            "Error getting membership ID for user ID %s in group ID %s: %s",
+            user_id,
+            group_id,
+            e,
         )
     return None
 
@@ -351,7 +354,10 @@ def sync_group_members(
         member_surname = member["surname"]
 
         logger.debug(
-            "Processing member: %s, GivenName: %s, Surname: %s", member_name, member_given_name, member_surname
+            "Processing member: %s, GivenName: %s, Surname: %s",
+            member_name,
+            member_given_name,
+            member_surname,
         )
 
         # Check if the user exists
@@ -396,7 +402,9 @@ def sync_group_members(
                     )
                 except ClientError as e:
                     logger.error(
-                        "Failed to create user '%s' in AWS Identity Center: %s", member_name, e
+                        "Failed to create user '%s' in AWS Identity Center: %s",
+                        member_name,
+                        e,
                     )
                     raise e
 
@@ -429,11 +437,16 @@ def sync_group_members(
                 except ClientError as e:
                     if e.response["Error"]["Code"] == "EntityAlreadyExistsException":
                         logger.info(
-                            "User '%s' is already a member of group '%s'.", member_name, group_name
+                            "User '%s' is already a member of group '%s'.",
+                            member_name,
+                            group_name,
                         )
                     else:
                         logger.error(
-                            "Failed to add user '%s' to group '%s': %s", member_name, group_name, e
+                            "Failed to add user '%s' to group '%s': %s",
+                            member_name,
+                            group_name,
+                            e,
                         )
                         raise e
 
@@ -456,7 +469,8 @@ def remove_obsolete_groups(
         if group_name not in azure_group_names:
             if dry_run:
                 logger.info(
-                    "[Dry Run] Would delete group '%s' from AWS Identity Center.", group_name
+                    "[Dry Run] Would delete group '%s' from AWS Identity Center.",
+                    group_name,
                 )
                 group_id = aws_groups[group_name]["GroupId"]
                 del aws_groups[group_name]
@@ -505,7 +519,9 @@ def remove_members_not_in_azure_groups(
 
             if members_to_remove:
                 logger.debug(
-                    "Members to remove from group '%s': %s", group_name, members_to_remove
+                    "Members to remove from group '%s': %s",
+                    group_name,
+                    members_to_remove,
                 )
             else:
                 logger.debug("No members to remove from group '%s'.", group_name)
@@ -549,11 +565,16 @@ def remove_members_not_in_azure_groups(
                                 )
                             except ClientError as e:
                                 logger.error(
-                                    "Error removing user '%s' from group '%s': %s", username, group_name, e
+                                    "Error removing user '%s' from group '%s': %s",
+                                    username,
+                                    group_name,
+                                    e,
                                 )
                     else:
                         logger.warning(
-                            "No membership ID found for user '%s' in group '%s'.", username, group_name
+                            "No membership ID found for user '%s' in group '%s'.",
+                            username,
+                            group_name,
                         )
                 else:
                     logger.warning("No user ID found for username '%s'.", username)
@@ -605,13 +626,16 @@ def delete_orphaned_aws_users(
                     for email in user_info["Emails"]
                 )
                 logger.debug(
-                    "User %s has a matching EntraId primary email: %s", username, email_matches
+                    "User %s has a matching EntraId primary email: %s",
+                    username,
+                    email_matches,
                 )
 
                 if email_matches:
                     if dry_run:
                         logger.info(
-                            "[Dry Run] Would delete user '%s' from AWS Identity Center.", username
+                            "[Dry Run] Would delete user '%s' from AWS Identity Center.",
+                            username,
                         )
                     else:
                         logger.info(
@@ -658,7 +682,9 @@ def lambda_handler(event, context):
 
         # Get GROUP_PREFIX prefixed groups
         azure_groups = get_entraid_aws_groups(access_token)
-        logger.info("Found %d groups prefixed with '%s'", len(azure_groups), GROUP_PREFIX)
+        logger.info(
+            "Found %d groups prefixed with '%s'", len(azure_groups), GROUP_PREFIX
+        )
 
         # Get existing Identity Center groups, users, and their memberships
         aws_groups, relevant_users = get_identity_center_groups_and_relevant_users(

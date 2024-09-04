@@ -242,7 +242,9 @@ class TestMemberSync(unittest.TestCase):
 
     @patch("function.app.get_identity_center_user_id_by_username")
     @patch("function.app.boto3.client")
-    def test_delete_unused_users(self, mock_boto_client, mock_get_user_id): # pylint: disable=W0613
+    def test_delete_unused_users(
+        self, mock_boto_client, mock_get_user_id
+    ):  # pylint: disable=W0613
         identity_center_client = MagicMock()
         mock_boto_client.return_value = identity_center_client
 

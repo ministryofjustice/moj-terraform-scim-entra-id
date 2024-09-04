@@ -9,6 +9,7 @@ from function.app import (
     get_identity_store_id,
 )
 
+
 class TestAWSFunctions(unittest.TestCase):
     @patch("function.app.boto3.client")
     def test_get_identity_store_id(self, mock_boto_client):

@@ -9,6 +9,7 @@ from function.app import (
     sync_group_members,
 )
 
+
 class TestMemberSync(unittest.TestCase):
     @patch("function.app.get_identity_center_user_id_by_username")
     @patch("function.app.boto3.client")

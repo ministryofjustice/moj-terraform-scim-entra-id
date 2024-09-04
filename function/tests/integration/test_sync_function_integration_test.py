@@ -84,7 +84,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         def list_users_side_effect(
             IdentityStoreId, Filters
-        ):  # pylint: disable=W0613,C103
+        ):  # pylint: disable=W0613,C0103
             username = next(
                 filter["AttributeValue"]
                 for filter in Filters
@@ -172,7 +172,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         def describe_user_side_effect(
             IdentityStoreId, UserId
-        ):  # pylint: disable=W0613,C103
+        ):  # pylint: disable=W0613,C0103
             if UserId in self.user_id_to_username:
                 return {
                     "UserName": self.user_id_to_username[UserId],

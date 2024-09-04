@@ -33,8 +33,8 @@ for var in required_env_vars:
         raise EnvironmentError(f"Missing required environment variable: {var}")
 
 # Cache for storing user and group data
-user_cache = {}
-group_members_cache = {}
+user_cache: dict[str, str] = {}
+group_members_cache: dict[str, list[dict]] = {}
 
 
 def get_identity_store_id(sso_client):

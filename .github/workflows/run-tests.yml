@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "function/**" # Trigger only if there are changes in the function directory
+      - '.github/workflows/run-tests.yml'
   workflow_dispatch: # Allows manual triggering of the workflow
 
 jobs:

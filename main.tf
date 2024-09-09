@@ -3,8 +3,6 @@ data "aws_caller_identity" "current" {}
 locals {
   name = "entra-id-scim-lambda"
 }
-
-# KMS alias for encrypting environment variables, if needed
 data "aws_kms_alias" "lambda" {
   name = "alias/aws/lambda"
 }
@@ -73,7 +71,8 @@ resource "aws_iam_role_policy_attachment" "default" {
 
 resource "aws_cloudwatch_log_group" "default" {
   name              = "/aws/lambda/${local.name}"
-  retention_in_days = 14
+  retention_in_days = 365
+  kms_key_id        = data.aws_kms_alias.lambda.arn
 }
 
 data "archive_file" "function" {
@@ -82,6 +81,11 @@ data "archive_file" "function" {
   output_path = "${path.module}/function.zip"
 }
 
+
+#checkov:skip=CKV_AWS_116:No DLQ needed for this function
+#checkov:skip=CKV_AWS_115:No function-level concurrency limit required
+#checkov:skip=CKV_AWS_272:No code-signing configuration required
+#checkov:skip=CKV_AWS_117:Not configuring a VPC for this Lambda
 resource "aws_lambda_function" "default" {
   function_name = local.name
   role          = aws_iam_role.default.arn
@@ -99,6 +103,11 @@ resource "aws_lambda_function" "default" {
       AZURE_CLIENT_ID     = var.azure_client_id
       AZURE_CLIENT_SECRET = var.azure_client_secret
     }
+  }
+
+  # Enable X-Ray tracing
+  tracing_config {
+    mode = "Active" # Enables active tracing for Lambda function
   }
 
   tags = var.tags

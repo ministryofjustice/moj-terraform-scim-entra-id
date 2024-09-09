@@ -2,7 +2,6 @@ name: CI - Unit and Integration Tests
 
 on:
   push:
-
   workflow_dispatch:
 
 permissions:
@@ -21,18 +20,27 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set environment variables
+        run: |
+          echo "AZURE_TENANT_ID=dummy_value" >> $GITHUB_ENV
+          echo "AZURE_CLIENT_ID=dummy_value" >> $GITHUB_ENV
+          echo "AZURE_CLIENT_SECRET=dummy_value" >> $GITHUB_ENV
+          echo "LOG_LEVEL=INFO" >> $GITHUB_ENV
+
       - name: Install dependencies
         run: |
+          set -e  # Exit immediately if a command exits with a non-zero status
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
       - name: Run unit tests and log output
         run: |
+          set -e  # Ensure the script fails if the tests fail
           python -m unittest discover -s function/tests/unit 2>&1 | tee unit-test-results.log
+        continue-on-error: false
 
       - name: Upload unit test logs
-        if: always()
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: Unit Test Logs
@@ -40,10 +48,11 @@ jobs:
 
       - name: Run integration tests and log output
         run: |
+          set -e  # Ensure the script fails if the tests fail
           python -m unittest discover -s function/tests/integration 2>&1 | tee integration-test-results.log
+        continue-on-error: false
 
       - name: Upload integration test logs
-        if: always()
         uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
         with:
           name: Integration Test Logs

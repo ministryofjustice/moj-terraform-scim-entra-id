@@ -1,0 +1,63 @@
+name: CI - Unit and Integration Tests
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read # Allow read access to repository contents
+  actions: write # Allow write access to actions to upload artifacts
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Set environment variables
+        run: |
+          {
+            echo "AZURE_TENANT_ID=dummy_value";
+            echo "AZURE_CLIENT_ID=dummy_value";
+            echo "AZURE_CLIENT_SECRET=dummy_value";
+            echo "LOG_LEVEL=INFO";
+          } >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: |
+          set -e  # Exit immediately if a command exits with a non-zero status
+          python -m pip install --upgrade pip
+          pip install -r function/requirements.txt
+          pip install -r function/requirements-dev.txt
+
+      - name: Run unit tests and log output
+        run: |
+          set -e  # Ensure the script fails if the tests fail
+          python -m unittest discover -s "function/tests/unit" 2>&1 | tee "unit-test-results.log"
+        continue-on-error: false # Ensure the job fails if the tests do not run
+
+      - name: Upload unit test logs
+        if: always()
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        with:
+          name: Unit Test Logs
+          path: "unit-test-results.log"
+
+      - name: Run integration tests and log output
+        run: |
+          set -e  # Ensure the script fails if the tests fail
+          python -m unittest discover -s "function/tests/integration" 2>&1 | tee "integration-test-results.log"
+        continue-on-error: false # Ensure the job fails if the tests do not run
+
+      - name: Upload integration test logs
+        if: always()
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+        with:
+          name: Integration Test Logs
+          path: "integration-test-results.log"

@@ -6,6 +6,7 @@ mypy==1.11.0
 pylint==3.2.6
 unittest2==1.1.0
 mock==5.1.0
+requests_mock==1.12.1
 
 boto3==1.28.57
 botocore==1.31.57

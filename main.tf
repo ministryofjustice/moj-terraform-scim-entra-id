@@ -3,9 +3,6 @@ data "aws_caller_identity" "current" {}
 locals {
   name = "entra-id-scim-lambda"
 }
-data "aws_kms_alias" "lambda" {
-  name = "alias/aws/lambda"
-}
 
 data "aws_iam_policy_document" "assume_role" {
   statement {

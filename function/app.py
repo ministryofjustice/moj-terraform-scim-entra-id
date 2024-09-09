@@ -669,10 +669,10 @@ def lambda_handler(event, context):  # pylint: disable=W0621,W0613
     Returns:
         dict: HTTP response with status code and body.
     """
-    dry_run = event.get("dry_run", True)
+    dry_run = event.get("dry_run", "True").lower() == "true"
+    logger.info("Running in dry_run = %s mode", dry_run)
     sso_client = boto3.client("sso-admin", region_name="eu-west-2")
     identity_center_client = boto3.client("identitystore", region_name="eu-west-2")
-
     identity_store_id = get_identity_store_id(sso_client)
 
     try:

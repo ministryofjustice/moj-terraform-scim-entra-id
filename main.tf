@@ -41,12 +41,23 @@ data "aws_iam_policy_document" "default" {
       "identitystore:ListGroupMemberships",
       "identitystore:ListGroups",
       "identitystore:ListUsers",
+      "identitystore:DescribeUser",
     ]
     resources = [
       "arn:aws:identitystore::${data.aws_caller_identity.current.account_id}:identitystore/*",
       "arn:aws:identitystore:::user/*",
       "arn:aws:identitystore:::group/*",
       "arn:aws:identitystore:::membership/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "sso:ListInstances",
+    ]
+    resources = [
+      "arn:aws:sso:::instance/*"
     ]
   }
 }

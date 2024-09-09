@@ -5,7 +5,7 @@ import sys
 import traceback
 
 import boto3
-import requests
+from pip._vendor import requests
 from botocore.exceptions import ClientError
 
 # Initialize environment variables

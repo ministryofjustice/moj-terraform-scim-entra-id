@@ -72,7 +72,6 @@ resource "aws_iam_role_policy_attachment" "default" {
 resource "aws_cloudwatch_log_group" "default" {
   name              = "/aws/lambda/${local.name}"
   retention_in_days = 365
-  kms_key_id        = data.aws_kms_alias.lambda.arn
 }
 
 data "archive_file" "function" {
@@ -95,8 +94,6 @@ resource "aws_lambda_function" "default" {
 
   filename         = data.archive_file.function.output_path
   source_code_hash = data.archive_file.function.output_base64sha256
-
-  kms_key_arn = data.aws_kms_alias.lambda.arn
 
   environment {
     variables = {

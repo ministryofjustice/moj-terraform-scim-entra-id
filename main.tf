@@ -81,6 +81,7 @@ data "archive_file" "function" {
   output_path = "${path.module}/function.zip"
 }
 
+#ts:skip=AWS.LAMBDA.VPC_CONFIGURATION:No VPC configuration needed for this Lambda function
 resource "aws_lambda_function" "default" {
   #checkov:skip=CKV_AWS_116:No DLQ needed for this function
   #checkov:skip=CKV_AWS_115:No function-level concurrency limit required

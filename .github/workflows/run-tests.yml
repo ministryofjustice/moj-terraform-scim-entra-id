@@ -2,9 +2,7 @@ name: CI - Unit and Integration Tests
 
 on:
   push:
-    paths:
-      - "function/**" # Trigger only if there are changes in the function directory
-      - ".github/workflows/run-tests.yml"
+
   workflow_dispatch:
 
 permissions:

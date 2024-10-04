@@ -15,6 +15,7 @@ CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 GROUP_PREFIX = "azure-aws-sso-"
+HOLDING_GROUP_NAME = "azure-aws-sso-all-members"
 
 # Set up logging
 logger = logging.getLogger()
@@ -328,6 +329,7 @@ def sync_azure_groups_with_aws(
             aws_groups[group_name],
             members,
             group_name,
+            aws_groups[HOLDING_GROUP_NAME],
             dry_run,
         )
 
@@ -335,10 +337,16 @@ def sync_azure_groups_with_aws(
 
 
 def sync_group_members(
-    identity_center_client, identity_store_id, group_info, members, group_name, dry_run
+    identity_center_client,
+    identity_store_id,
+    group_info,
+    members,
+    group_name,
+    holding_group_info,
+    dry_run,
 ):  # pylint: disable=R0913
     """
-    Sync members of a specific Azure AD group with AWS Identity Center.
+    Sync members of a specific Azure AD group with AWS Identity Center, and ensure they are also added to the holding group.
 
     Args:
         identity_center_client: Boto3 client for Identity Center.
@@ -346,6 +354,7 @@ def sync_group_members(
         group_info (dict): AWS Identity Center group information.
         members (list): List of Azure AD group members.
         group_name (str): Name of the group.
+        holding_group_info (dict): Information about the holding group.
         dry_run (bool): If True, only log the actions without making changes.
     """
     for member in members:
@@ -450,6 +459,38 @@ def sync_group_members(
                         )
                         raise e
 
+        # Ensure the user is added to the holding group
+        if user_id and member_name not in holding_group_info["Members"]:
+            if dry_run:
+                logger.info(
+                    "[Dry Run] Would add user '%s' to holding group.", member_name
+                )
+            else:
+                try:
+                    logger.info("Adding user '%s' to holding group.", member_name)
+                    identity_center_client.create_group_membership(
+                        IdentityStoreId=identity_store_id,
+                        GroupId=holding_group_info["GroupId"],
+                        MemberId={"UserId": user_id},
+                    )
+                    holding_group_info["Members"].add(member_name)
+                    logger.info(
+                        "Successfully added user '%s' to holding group.", member_name
+                    )
+                except ClientError as e:
+                    if e.response["Error"]["Code"] == "EntityAlreadyExistsException":
+                        logger.info(
+                            "User '%s' is already a member of the holding group.",
+                            member_name,
+                        )
+                    else:
+                        logger.error(
+                            "Failed to add user '%s' to holding group: %s",
+                            member_name,
+                            e,
+                        )
+                        raise e
+
 
 def remove_obsolete_groups(
     identity_center_client, identity_store_id, aws_groups, azure_groups, dry_run
@@ -467,6 +508,8 @@ def remove_obsolete_groups(
     azure_group_names = set(group["displayName"] for group in azure_groups)
     for group_name in list(aws_groups.keys()):
         if group_name not in azure_group_names:
+            if group_name == HOLDING_GROUP_NAME:
+                continue  # Don't delete the holding group even if empty
             if dry_run:
                 logger.info(
                     "[Dry Run] Would delete group '%s' from AWS Identity Center.",
@@ -489,22 +532,30 @@ def remove_obsolete_groups(
 
 
 def remove_members_not_in_azure_groups(
-    identity_center_client, identity_store_id, aws_groups, azure_group_members, dry_run
-):  # pylint: disable=R0912
+    identity_center_client,
+    identity_store_id,
+    aws_groups,
+    azure_group_members,
+    holding_group_info,
+    dry_run,
+):
     """
-    Remove users from AWS Identity Center groups if they no longer exist in Azure AD groups.
+    Remove users from AWS Identity Center groups if they no longer exist in Azure AD groups,
+    and delete users from Identity Center if they are not in any EntraID groups.
 
     Args:
         identity_center_client: Boto3 client for Identity Center.
         identity_store_id (str): Identity Store ID.
         aws_groups (dict): Existing AWS Identity Center groups.
         azure_group_members (dict): Dictionary of Azure AD group members.
+        holding_group_info (dict): Information about the holding group in Identity Center.
         dry_run (bool): If True, only log the actions without making changes.
     """
     logger.info("Starting to remove users not in Azure groups...")
 
-    for group_name, members in azure_group_members.items():  # pylint: disable=R1702
-        logger.info("Processing group: %s", group_name)
+    for group_name, members in azure_group_members.items():
+        if group_name == HOLDING_GROUP_NAME:
+            continue  # Skip holding group in all sync aspects other than those related to the holding group itself
 
         if group_name in aws_groups:
             azure_member_names = {member["userPrincipalName"] for member in members}
@@ -548,6 +599,7 @@ def remove_members_not_in_azure_groups(
                             )
                         else:
                             try:
+                                # Remove the user from the group
                                 logger.info(
                                     "Removing user '%s' from group '%s' in AWS Identity Center.",
                                     username,
@@ -558,10 +610,31 @@ def remove_members_not_in_azure_groups(
                                     MembershipId=membership_id,
                                 )
                                 aws_groups[group_name]["Members"].remove(username)
+
+                                # Remove from holding group if the user exists there
+                                holding_membership_id = get_group_membership_id(
+                                    identity_center_client,
+                                    identity_store_id,
+                                    holding_group_info["GroupId"],
+                                    user_id,
+                                )
+                                if holding_membership_id:
+                                    identity_center_client.delete_group_membership(
+                                        IdentityStoreId=identity_store_id,
+                                        MembershipId=holding_membership_id,
+                                    )
+                                    holding_group_info["Members"].remove(username)
+                                    logger.info(
+                                        "Removed user '%s' from holding group.",
+                                        username,
+                                    )
+
+                                # Now delete the user from Identity Center
+                                identity_center_client.delete_user(
+                                    IdentityStoreId=identity_store_id, UserId=user_id
+                                )
                                 logger.info(
-                                    "Successfully removed user '%s' from group '%s' in AWS Identity Center.",
-                                    username,
-                                    group_name,
+                                    "Deleted user '%s' from Identity Center.", username
                                 )
                             except ClientError as e:
                                 logger.error(
@@ -587,17 +660,23 @@ def remove_members_not_in_azure_groups(
 
 
 def delete_orphaned_aws_users(
-    identity_center_client, identity_store_id, aws_groups, relevant_users, dry_run
+    identity_center_client,
+    identity_store_id,
+    aws_groups,
+    relevant_users,
+    holding_group_info,
+    dry_run,
 ):
     """
-    Delete users in AWS Identity Center who are not members of any relevant groups
-    and have a specific email type.
+    Delete users in AWS Identity Center who are not members of any relevant groups,
+    and remove them from the holding group if applicable.
 
     Args:
         identity_center_client: Boto3 client for Identity Center.
         identity_store_id (str): Identity Store ID.
         aws_groups (dict): Existing AWS Identity Center groups.
         relevant_users (set): Set of relevant user IDs.
+        holding_group_info (dict): Information about the holding group in Identity Center.
         dry_run (bool): If True, only log the actions without making changes.
     """
     logger.info("Listing all relevant users in AWS Identity Center...")
@@ -638,6 +717,24 @@ def delete_orphaned_aws_users(
                             username,
                         )
                     else:
+                        # First, remove the user from the holding group if applicable
+                        membership_id = get_group_membership_id(
+                            identity_center_client,
+                            identity_store_id,
+                            holding_group_info["GroupId"],
+                            user_id,
+                        )
+                        if membership_id:
+                            identity_center_client.delete_group_membership(
+                                IdentityStoreId=identity_store_id,
+                                MembershipId=membership_id,
+                            )
+                            holding_group_info["Members"].remove(username)
+                            logger.info(
+                                "Removed user '%s' from holding group.", username
+                            )
+
+                        # Now delete the user from Identity Center
                         logger.info(
                             "Deleting user '%s' from AWS Identity Center.", username
                         )
@@ -692,6 +789,35 @@ def lambda_handler(event, context):  # pylint: disable=W0621,W0613
         )
 
         # 1. Add/Sync groups and users between Azure AD and AWS Identity Center
+        if HOLDING_GROUP_NAME not in aws_groups:  # Ensure the holding group exists
+            if dry_run:
+                logger.info(
+                    "[Dry Run] Would create holding group '%s'.", HOLDING_GROUP_NAME
+                )
+                aws_groups[HOLDING_GROUP_NAME] = {
+                    "GroupId": f"dry_run_dummy_{HOLDING_GROUP_NAME}",
+                    "Members": set(),
+                }
+            else:
+                try:
+                    response = identity_center_client.create_group(
+                        IdentityStoreId=identity_store_id,
+                        DisplayName=HOLDING_GROUP_NAME,
+                    )
+                    aws_groups[HOLDING_GROUP_NAME] = {
+                        "GroupId": response["GroupId"],
+                        "Members": set(),
+                    }
+                    logger.info(
+                        "Created holding group '%s' in AWS Identity Center.",
+                        HOLDING_GROUP_NAME,
+                    )
+                except ClientError as e:
+                    logger.error(
+                        "Failed to create holding group '%s': %s", HOLDING_GROUP_NAME, e
+                    )
+                    raise e
+
         azure_group_members = sync_azure_groups_with_aws(
             identity_center_client, identity_store_id, aws_groups, azure_groups, dry_run
         )
@@ -711,6 +837,7 @@ def lambda_handler(event, context):  # pylint: disable=W0621,W0613
             identity_store_id,
             aws_groups,
             azure_group_members,
+            aws_groups[HOLDING_GROUP_NAME],
             dry_run=dry_run,
         )
 
@@ -720,6 +847,7 @@ def lambda_handler(event, context):  # pylint: disable=W0621,W0613
             identity_store_id,
             aws_groups,
             relevant_users,
+            aws_groups[HOLDING_GROUP_NAME],  # Pass holding group info
             dry_run=dry_run,
         )
 

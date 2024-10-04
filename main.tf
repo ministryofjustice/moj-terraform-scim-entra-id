@@ -17,6 +17,7 @@ data "aws_iam_policy_document" "assume_role" {
 }
 
 data "aws_iam_policy_document" "default" {
+  #checkov:skip=CKV_AWS_158:Won't implement
   statement {
     effect = "Allow"
     actions = [

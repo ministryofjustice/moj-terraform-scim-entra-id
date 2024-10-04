@@ -554,7 +554,7 @@ def remove_members_not_in_azure_groups(
     """
     logger.info("Starting to remove users not in Azure groups...")
 
-    for group_name, members in azure_group_members.items(): # pylint: disable=R1702
+    for group_name, members in azure_group_members.items():  # pylint: disable=R1702
         if group_name == HOLDING_GROUP_NAME:
             continue  # Skip holding group in all sync aspects other than those related to the holding group itself
 

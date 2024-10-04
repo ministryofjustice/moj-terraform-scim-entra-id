@@ -336,7 +336,7 @@ def sync_azure_groups_with_aws(
     return azure_group_members
 
 
-def sync_group_members(
+def sync_group_members(  # pylint: disable=R0913,R0912
     identity_center_client,
     identity_store_id,
     group_info,
@@ -344,7 +344,7 @@ def sync_group_members(
     group_name,
     holding_group_info,
     dry_run,
-):  # pylint: disable=R0913,R912
+):
     """
     Sync members of a specific Azure AD group with AWS Identity Center,
     and ensure they are also added to the holding group.
@@ -532,14 +532,14 @@ def remove_obsolete_groups(
                     logger.error("Error deleting group %s: %s", group_name, e)
 
 
-def remove_members_not_in_azure_groups(
+def remove_members_not_in_azure_groups(  # pylint: disable=R0912,R0914
     identity_center_client,
     identity_store_id,
     aws_groups,
     azure_group_members,
     holding_group_info,
     dry_run,
-):  # pylint: disable=R0912
+):
     """
     Remove users from AWS Identity Center groups if they no longer exist in Azure AD groups,
     and delete users from Identity Center if they are not in any EntraID groups.
@@ -660,7 +660,7 @@ def remove_members_not_in_azure_groups(
     logger.info("Completed removal of users not in Azure groups.")
 
 
-def delete_orphaned_aws_users(
+def delete_orphaned_aws_users(  # pylint: disable=R0913
     identity_center_client,
     identity_store_id,
     aws_groups,
@@ -688,7 +688,7 @@ def delete_orphaned_aws_users(
         all_group_members.update(group["Members"])
 
     # Iterate over all relevant users
-    for user_id in relevant_users:
+    for user_id in relevant_users:  # pylint: disable=R1702
         try:
             user_info = identity_center_client.describe_user(
                 IdentityStoreId=identity_store_id, UserId=user_id

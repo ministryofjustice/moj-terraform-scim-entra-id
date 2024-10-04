@@ -344,9 +344,10 @@ def sync_group_members(
     group_name,
     holding_group_info,
     dry_run,
-):  # pylint: disable=R0913
+):  # pylint: disable=R0913,R912
     """
-    Sync members of a specific Azure AD group with AWS Identity Center, and ensure they are also added to the holding group.
+    Sync members of a specific Azure AD group with AWS Identity Center,
+    and ensure they are also added to the holding group.
 
     Args:
         identity_center_client: Boto3 client for Identity Center.
@@ -538,7 +539,7 @@ def remove_members_not_in_azure_groups(
     azure_group_members,
     holding_group_info,
     dry_run,
-):
+):  # pylint: disable=R0912
     """
     Remove users from AWS Identity Center groups if they no longer exist in Azure AD groups,
     and delete users from Identity Center if they are not in any EntraID groups.
@@ -553,7 +554,7 @@ def remove_members_not_in_azure_groups(
     """
     logger.info("Starting to remove users not in Azure groups...")
 
-    for group_name, members in azure_group_members.items():
+    for group_name, members in azure_group_members.items(): # pylint: disable=R1702
         if group_name == HOLDING_GROUP_NAME:
             continue  # Skip holding group in all sync aspects other than those related to the holding group itself
 

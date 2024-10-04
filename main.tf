@@ -93,7 +93,10 @@ resource "aws_lambda_function" "default" {
   #checkov:skip=CKV_AWS_115:No function-level concurrency limit required
   #checkov:skip=CKV_AWS_272:No code-signing configuration required
   #checkov:skip=CKV_AWS_117:Not configuring a VPC for this Lambda
+  #checkov:skip=CKV_AWS_173:All sensitive envvars are retrieved from secrets manager
+  #checkov:skip=CKV_AWS_158:Won't implement
   #ts:skip=AWS.LambdaFunction.Logging.0472:No VPC configuration needed for this Lambda function
+  #ts:skip=AWS.LambdaFunction.EncryptionandKeyManagement.0471:Sensitive vars are read from secrets manager
 
   function_name = local.name
   role          = aws_iam_role.default.arn

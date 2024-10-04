@@ -79,6 +79,7 @@ resource "aws_iam_role_policy_attachment" "default" {
 }
 
 resource "aws_cloudwatch_log_group" "default" {
+  #checkov:skip=CKV_AWS_158:Won't implement
   name              = "/aws/lambda/${local.name}"
   retention_in_days = 365
 }

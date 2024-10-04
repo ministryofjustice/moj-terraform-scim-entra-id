@@ -45,8 +45,8 @@ class TestMemberSync(unittest.TestCase):
             group_info,
             members,
             "mocked_group_name",
-            holding_group_info=group_info,
             dry_run=False,
+            holding_group_info=group_info,
         )
 
         # Ensure create_user was not called

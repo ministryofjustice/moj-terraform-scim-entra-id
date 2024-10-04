@@ -532,7 +532,7 @@ def remove_obsolete_groups(
                     logger.error("Error deleting group %s: %s", group_name, e)
 
 
-def remove_members_not_in_azure_groups(  # pylint: disable=R0912,R0914
+def remove_members_not_in_azure_groups(  # pylint: disable=R0912,R0914,R0913
     identity_center_client,
     identity_store_id,
     aws_groups,

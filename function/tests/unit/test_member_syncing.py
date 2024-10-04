@@ -46,6 +46,7 @@ class TestMemberSync(unittest.TestCase):
             members,
             "mocked_group_name",
             dry_run=False,
+            holding_group_info=group_info,
         )
 
         # Ensure create_user was not called
@@ -79,6 +80,7 @@ class TestMemberSync(unittest.TestCase):
             group_info,
             members,
             "mocked_group_name",
+            holding_group_info=group_info,
             dry_run=False,
         )
 
@@ -112,6 +114,7 @@ class TestMemberSync(unittest.TestCase):
             group_info,
             members,
             "mocked_group_name",
+            holding_group_info=group_info,
             dry_run=True,
         )
 
@@ -145,6 +148,7 @@ class TestMemberSync(unittest.TestCase):
             group_info,
             members,
             "mocked_group_name",
+            holding_group_info=group_info,
             dry_run=False,
         )
 
@@ -190,6 +194,7 @@ class TestMemberSync(unittest.TestCase):
                 group_info,
                 members,
                 "mocked_group_name",
+                holding_group_info=group_info,
                 dry_run=False,
             )
 
@@ -231,6 +236,7 @@ class TestMemberSync(unittest.TestCase):
             "mocked_identity_store_id",
             aws_groups,
             azure_group_members,
+            holding_group_info=aws_groups,
             dry_run=False,
         )
 
@@ -263,6 +269,7 @@ class TestMemberSync(unittest.TestCase):
             "mocked_identity_store_id",
             aws_groups,
             relevant_users,
+            holding_group_info=aws_groups,
             dry_run=False,
         )
 

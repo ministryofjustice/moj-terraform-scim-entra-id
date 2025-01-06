@@ -17,6 +17,12 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 GROUP_PREFIX = "azure-aws-sso-"
 HOLDING_GROUP_NAME = "azure-aws-sso-all-members"
 
+IGNORED_GROUPS = [
+    "azure-aws-sso-analytical-platform-qs-readers",
+    "azure-aws-sso-analytical-platform-qs-authors",
+    "azure-aws-sso-analytical-platform-qs-admins",
+]
+
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel(LOG_LEVEL)
@@ -89,7 +95,10 @@ def get_entraid_aws_groups(access_token):
 
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
-    return response.json()["value"]
+    all_groups = response.json()["value"]
+
+    # Filter out ignored groups
+    return [group for group in all_groups if group["displayName"] not in IGNORED_GROUPS]
 
 
 def get_entraid_group_members(access_token, group_id):
@@ -119,10 +128,14 @@ def get_entraid_group_members(access_token, group_id):
     response_admins = requests.get(url_admins, headers=headers)
     response_admins.raise_for_status()
     admins = response_admins.json()["value"]
-
-    # Combine members and admins
-    combined_members = members + admins
-
+    # raw members and admins
+    raw_members = members + admins
+    # filter out non-justice user
+    combined_members = [
+        member
+        for member in raw_members
+        if member.get("userPrincipalName", "").endswith("justice.gov.uk")
+    ]
     group_members_cache[group_id] = combined_members
     return combined_members
 
@@ -152,6 +165,9 @@ def get_identity_center_groups_and_relevant_users(
                 if group_name_prefix == "" or group["DisplayName"].startswith(
                     group_name_prefix
                 ):
+                    if group["DisplayName"] in IGNORED_GROUPS:
+                        logger.info("Skipping ignored group: %s", group["DisplayName"])
+                        continue
                     groups[group["DisplayName"]] = {
                         "GroupId": group["GroupId"],
                         "Members": set(),
@@ -509,6 +525,9 @@ def remove_obsolete_groups(
     azure_group_names = set(group["displayName"] for group in azure_groups)
     for group_name in list(aws_groups.keys()):
         if group_name not in azure_group_names:
+            if group_name in IGNORED_GROUPS:
+                logger.info("Skipping deletion of ignored group: %s", group_name)
+                continue  # These groups are managed elsewhere
             if group_name == HOLDING_GROUP_NAME:
                 continue  # Don't delete the holding group even if empty
             if dry_run:
@@ -866,6 +885,6 @@ def lambda_handler(event, context):  # pylint: disable=W0621,W0613
 
 if __name__ == "__main__":
     # This is for local testing
-    event = {"dry_run": True}
+    event = {"dry_run": "True"}
     context = None  # pylint: disable=C0103
     lambda_handler(event, context)

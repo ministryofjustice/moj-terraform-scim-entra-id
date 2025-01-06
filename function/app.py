@@ -95,7 +95,10 @@ def get_entraid_aws_groups(access_token):
 
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
-    return response.json()["value"]
+    all_groups = response.json()["value"]
+
+    # Filter out ignored groups
+    return [group for group in all_groups if group["displayName"] not in IGNORED_GROUPS]
 
 
 def get_entraid_group_members(access_token, group_id):
@@ -162,6 +165,9 @@ def get_identity_center_groups_and_relevant_users(
                 if group_name_prefix == "" or group["DisplayName"].startswith(
                     group_name_prefix
                 ):
+                    if group["DisplayName"] in IGNORED_GROUPS:
+                        logger.info("Skipping ignored group: %s", group["DisplayName"])
+                        continue
                     groups[group["DisplayName"]] = {
                         "GroupId": group["GroupId"],
                         "Members": set(),
@@ -519,6 +525,9 @@ def remove_obsolete_groups(
     azure_group_names = set(group["displayName"] for group in azure_groups)
     for group_name in list(aws_groups.keys()):
         if group_name not in azure_group_names:
+            if group_name in IGNORED_GROUPS:
+                logger.info("Skipping deletion of ignored group: %s", group_name)
+                continue  # These groups are managed elsewhere
             if group_name == HOLDING_GROUP_NAME:
                 continue  # Don't delete the holding group even if empty
             if dry_run:

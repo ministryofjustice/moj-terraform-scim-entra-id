@@ -17,6 +17,12 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 GROUP_PREFIX = "azure-aws-sso-"
 HOLDING_GROUP_NAME = "azure-aws-sso-all-members"
 
+IGNORED_GROUPS = [
+    "azure-aws-sso-analytical-platform-qs-readers",
+    "azure-aws-sso-analytical-platform-qs-authors",
+    "azure-aws-sso-analytical-platform-qs-admins",
+]
+
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel(LOG_LEVEL)
@@ -119,10 +125,14 @@ def get_entraid_group_members(access_token, group_id):
     response_admins = requests.get(url_admins, headers=headers)
     response_admins.raise_for_status()
     admins = response_admins.json()["value"]
-
-    # Combine members and admins
-    combined_members = members + admins
-
+    # raw members and admins
+    raw_members = members + admins
+    # filter out non-justice user
+    combined_members = [
+        member
+        for member in raw_members
+        if member.get("userPrincipalName", "").endswith("justice.gov.uk")
+    ]
     group_members_cache[group_id] = combined_members
     return combined_members
 
@@ -866,6 +876,6 @@ def lambda_handler(event, context):  # pylint: disable=W0621,W0613
 
 if __name__ == "__main__":
     # This is for local testing
-    event = {"dry_run": True}
+    event = {"dry_run": "True"}
     context = None  # pylint: disable=C0103
     lambda_handler(event, context)

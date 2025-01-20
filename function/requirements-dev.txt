@@ -7,7 +7,7 @@ pylint==3.3.2
 unittest2==1.1.0
 mock==5.1.0
 requests_mock==1.12.1
-moto==5.0.13
+moto==5.0.27
 
 # Core Dependencies
 boto3==1.35.92           # AWS SDK for Python to interact with AWS services

@@ -3,7 +3,7 @@ black==24.10.0
 flake8==7.1.1
 isort==5.13.2
 mypy==1.11.0
-pylint==3.3.2
+pylint==3.3.4
 unittest2==1.1.0
 mock==5.1.0
 requests_mock==1.12.1

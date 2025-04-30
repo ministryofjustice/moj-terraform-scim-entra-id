@@ -432,7 +432,6 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                         member_name,
                         e,
                     )
-                    raise e
 
         # Add the user to the group if they are not already a member
         if member_name not in group_info["Members"]:
@@ -474,7 +473,6 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                             group_name,
                             e,
                         )
-                        raise e
 
         # Ensure the user is added to the holding group
         if user_id and member_name not in holding_group_info["Members"]:
@@ -506,7 +504,6 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                             member_name,
                             e,
                         )
-                        raise e
 
 
 def remove_obsolete_groups(

@@ -432,7 +432,6 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                         member_name,
                         e,
                     )
-                    raise e
 
         # Add the user to the group if they are not already a member
         if member_name not in group_info["Members"]:

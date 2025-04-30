@@ -6,7 +6,7 @@ import traceback
 
 import boto3
 from pip._vendor import requests
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, ParamValidationError
 
 # Initialize environment variables
 TENANT_ID = os.environ.get("AZURE_TENANT_ID")
@@ -426,7 +426,7 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                         member_name,
                         user_id,
                     )
-                except ClientError as e:
+                except (ClientError, ParamValidationError) as e:
                     logger.error(
                         "Failed to create user '%s' in AWS Identity Center: %s",
                         member_name,
@@ -459,20 +459,13 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                         member_name,
                         group_name,
                     )
-                except ClientError as e:
-                    if e.response["Error"]["Code"] == "EntityAlreadyExistsException":
-                        logger.info(
-                            "User '%s' is already a member of group '%s'.",
-                            member_name,
-                            group_name,
-                        )
-                    else:
-                        logger.error(
-                            "Failed to add user '%s' to group '%s': %s",
-                            member_name,
-                            group_name,
-                            e,
-                        )
+                except (ClientError, ParamValidationError) as e:
+                    logger.error(
+                        "Failed to add user '%s' to group '%s': %s",
+                        member_name,
+                        group_name,
+                        e,
+                    )
 
         # Ensure the user is added to the holding group
         if user_id and member_name not in holding_group_info["Members"]:

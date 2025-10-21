@@ -21,6 +21,7 @@ IGNORED_GROUPS = [
     "azure-aws-sso-analytical-platform-qs-readers",
     "azure-aws-sso-analytical-platform-qs-authors",
     "azure-aws-sso-analytical-platform-qs-admins",
+    "azure-aws-sso-analytical-platform-poc-redshift-users",
 ]
 
 # Set up logging

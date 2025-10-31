@@ -135,7 +135,9 @@ def get_entraid_group_members(access_token, group_id):
     combined_members = [
         member
         for member in raw_members
-        if member.get("userPrincipalName", "").endswith("justice.gov.uk")
+        if member.get("userPrincipalName", "").endswith(
+            ("justice.gov.uk", "yjb.gov.uk")
+        )
     ]
     group_members_cache[group_id] = combined_members
     return combined_members

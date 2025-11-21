@@ -11,7 +11,7 @@ on:
       - reopened
       - synchronize
 
-permissions: { }
+permissions: {}
 
 jobs:
   super-linter:

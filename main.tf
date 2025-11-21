@@ -78,9 +78,9 @@ resource "aws_iam_role_policy_attachment" "default" {
   policy_arn = aws_iam_policy.default.arn
 }
 
+#trivy:ignore:AVD-AWS-0017
 resource "aws_cloudwatch_log_group" "default" {
   #checkov:skip=CKV_AWS_158:Won't implement
-  #trivy:ignore:AVD-AWS-0017:Log group is not encrypted
   name              = "/aws/lambda/${local.name}"
   retention_in_days = 365
 }

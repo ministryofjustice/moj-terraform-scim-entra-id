@@ -9,7 +9,7 @@ on:
       - reopened
       - synchronize
 
-permissions: {}
+permissions: { }
 
 jobs:
   dependency-review:

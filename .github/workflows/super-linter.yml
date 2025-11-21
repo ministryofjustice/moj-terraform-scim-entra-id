@@ -23,9 +23,10 @@ jobs:
     steps:
       - name: Checkout
         id: checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Run Super-Linter
         id: super_linter
@@ -35,3 +36,5 @@ jobs:
           LINTER_RULES_PATH: /
           PYTHON_PYLINT_CONFIG_FILE: pyproject.toml
           VALIDATE_PYTHON_ISORT: false
+          VALIDATE_BIOME_FORMAT: false
+          VALIDATE_BIOME_LINT: false

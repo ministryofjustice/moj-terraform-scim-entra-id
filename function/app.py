@@ -348,8 +348,8 @@ def sync_azure_groups_with_aws(
             aws_groups[group_name],
             members,
             group_name,
-            aws_groups[HOLDING_GROUP_NAME],
-            dry_run,
+            holding_group_info=aws_groups[HOLDING_GROUP_NAME],
+            dry_run=dry_run,
         )
 
     return azure_group_members
@@ -361,6 +361,7 @@ def sync_group_members(  # pylint: disable=R0913,R0912
     group_info,
     members,
     group_name,
+    *,
     holding_group_info,
     dry_run,
 ):
@@ -550,6 +551,7 @@ def remove_members_not_in_azure_groups(  # pylint: disable=R0912,R0914,R0913
     aws_groups,
     azure_group_members,
     holding_group_info,
+    *,
     dry_run,
 ):
     """
@@ -678,6 +680,7 @@ def delete_orphaned_aws_users(  # pylint: disable=R0913
     aws_groups,
     relevant_users,
     holding_group_info,
+    *,
     dry_run,
 ):
     """
@@ -850,7 +853,7 @@ def lambda_handler(event, context):  # pylint: disable=W0621,W0613
             identity_store_id,
             aws_groups,
             azure_group_members,
-            aws_groups[HOLDING_GROUP_NAME],
+            holding_group_info=aws_groups[HOLDING_GROUP_NAME],
             dry_run=dry_run,
         )
 
@@ -860,7 +863,9 @@ def lambda_handler(event, context):  # pylint: disable=W0621,W0613
             identity_store_id,
             aws_groups,
             relevant_users,
-            aws_groups[HOLDING_GROUP_NAME],  # Pass holding group info
+            holding_group_info=aws_groups[
+                HOLDING_GROUP_NAME
+            ],  # Pass holding group info
             dry_run=dry_run,
         )
 

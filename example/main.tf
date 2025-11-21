@@ -20,7 +20,7 @@ module "entra_id_scim_lambda" {
   source = "../."
 
   # Required variables for the module
-  azure_tenant_id     = "your-tenant-id"     # Replace with your Azure Tenant ID
-  azure_client_id     = "your-client-id"     # Replace with your Azure Client ID
-  azure_client_secret = "your-client-secret" # Replace with your Azure Client Secret
+  azure_tenant_id     = var.azure_tenant_id     # Replace with your Azure Tenant ID
+  azure_client_id     = var.azure_client_id     # Replace with your Azure Client ID
+  azure_client_secret = var.azure_client_secret # Replace with your Azure Client Secret
 }

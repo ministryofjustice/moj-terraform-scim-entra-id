@@ -77,4 +77,3 @@ No modules.
 | <a name="output_lambda_function_name"></a> [lambda_function_name](#output_lambda_function_name) | Name of the deployed Lambda function |
 
 <!-- END_TF_DOCS -->
-

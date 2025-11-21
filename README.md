@@ -22,6 +22,50 @@ module "scim" {
 }
 ```
 
+## Monitoring and Alerting
+
+This module includes comprehensive CloudWatch monitoring and alerting. By default, monitoring is **enabled** and creates alarms for:
+
+- Lambda execution errors
+- High error rates
+- Long execution durations
+- Throttling issues
+- Scheduled job failures
+
+For detailed configuration options and integration with Slack/PagerDuty, see [MONITORING.md](./MONITORING.md).
+
+### Quick Start - Email Alerts
+
+```hcl
+module "scim" {
+  source = "github.com/ministryofjustice/moj-terraform-scim-entra-id"
+  
+  # Required
+  azure_tenant_id     = "your-tenant-id"
+  azure_client_id     = "your-client-id"
+  azure_client_secret = "your-client-secret"
+  
+  # Monitoring
+  alarm_email_endpoints = ["team@example.com"]
+}
+```
+
+### Using Existing SNS Topic (Slack/PagerDuty)
+
+```hcl
+module "scim" {
+  source = "github.com/ministryofjustice/moj-terraform-scim-entra-id"
+  
+  # Required
+  azure_tenant_id     = "your-tenant-id"
+  azure_client_id     = "your-client-id"
+  azure_client_secret = "your-client-secret"
+  
+  # Use existing alert channel
+  alarm_sns_topic_arn = "arn:aws:sns:eu-west-2:123456789012:platform-alerts"
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

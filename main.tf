@@ -78,6 +78,7 @@ resource "aws_iam_role_policy_attachment" "default" {
   policy_arn = aws_iam_policy.default.arn
 }
 
+#trivy:ignore:AVD-AWS-0017
 resource "aws_cloudwatch_log_group" "default" {
   #checkov:skip=CKV_AWS_158:Won't implement
   name              = "/aws/lambda/${local.name}"

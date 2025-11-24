@@ -1,16 +1,15 @@
-autopep8==2.3.1
-black==24.10.0
-flake8==7.1.1
-isort==5.13.2
-mypy==1.11.0
-pylint==3.3.2
+autopep8==2.3.2
+black==25.11.0
+flake8==7.3.0
+isort==7.0.0
+mypy==1.18.2
+pylint==4.0.3
 unittest2==1.1.0
-mock==5.1.0
+mock==5.2.0
 requests_mock==1.12.1
-moto==5.0.13
+moto==5.1.17
 
 # Core Dependencies
-boto3==1.35.92           # AWS SDK for Python to interact with AWS services
-botocore==1.35.92        # Low-level, data-driven core of boto3
-requests==2.32.3         # To make HTTP requests to EntraID
-
+boto3==1.41.1           # AWS SDK for Python to interact with AWS services
+botocore==1.41.1        # Low-level, data-driven core of boto3
+requests==2.32.5        # To make HTTP requests to EntraID

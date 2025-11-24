@@ -1,6 +1,6 @@
 # moj-terraform-scim-entra-id
 
-[![repo standards badge](https://github-community.service.justice.gov.uk/repository-standards/api/modernisation-platform-github-actions/badge)](https://github-community.service.justice.gov.uk/repository-standards/moj-terraform-scim-entra-id)
+[![Ministry of Justice Repository Compliance Badge](https://github-community.service.justice.gov.uk/repository-standards/api/moj-terraform-scim-entra-id/badge)](https://github-community.service.justice.gov.uk/repository-standards/moj-terraform-scim-entra-id)
 
 This Terraform module configures a Lambda function for provisioning (and deprovisioning) AWS SSO Identity Store users and groups from EntraID.
 

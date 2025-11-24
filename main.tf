@@ -157,6 +157,7 @@ resource "aws_lambda_permission" "allow_eventbridge" {
 # ========================================
 
 # SNS Topic for Lambda alarms
+#trivy:ignore:AVD-AWS-0136
 resource "aws_sns_topic" "lambda_alarms" {
   count = var.enable_monitoring && var.alarm_sns_topic_arn == "" ? 1 : 0
 

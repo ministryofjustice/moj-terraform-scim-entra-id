@@ -314,7 +314,7 @@ Useful queries for investigating issues:
 
 #### Find all errors
 
-```
+```sql
 fields @timestamp, @message
 | filter @message like /ERROR/
 | sort @timestamp desc
@@ -323,14 +323,14 @@ fields @timestamp, @message
 
 #### Execution duration statistics
 
-```
+```sql
 fields @duration
 | stats avg(@duration), max(@duration), min(@duration), count()
 ```
 
 #### Failed sync operations
 
-```
+```sql
 fields @timestamp, @message
 | filter @message like /Error/
 | parse @message /Error: (?<error_details>.*)/

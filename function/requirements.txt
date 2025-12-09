@@ -1,4 +1,4 @@
 # Core Dependencies
-boto3==1.41.1            # AWS SDK for Python to interact with AWS services
-botocore==1.41.1         # Low-level, data-driven core of boto3
+boto3==1.42.0            # AWS SDK for Python to interact with AWS services
+botocore==1.41.6         # Low-level, data-driven core of boto3
 requests==2.32.5         # To make HTTP requests to EntraID

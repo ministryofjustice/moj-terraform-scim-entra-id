@@ -9,11 +9,17 @@ updates:
       action-dependencies:
         patterns:
           - "*"
+    cooldown:
+      default-days: 7
   - package-ecosystem: "terraform"
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7

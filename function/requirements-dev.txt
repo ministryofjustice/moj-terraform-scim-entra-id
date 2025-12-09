@@ -11,5 +11,5 @@ moto==5.1.17
 
 # Core Dependencies
 boto3==1.41.5           # AWS SDK for Python to interact with AWS services
-botocore==1.41.5        # Low-level, data-driven core of boto3
+botocore==1.41.6        # Low-level, data-driven core of boto3
 requests==2.32.5        # To make HTTP requests to EntraID

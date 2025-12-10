@@ -23,3 +23,7 @@ updates:
       interval: "daily"
     cooldown:
       default-days: 7
+    groups:
+      boto:
+        patterns:
+          - "boto*"

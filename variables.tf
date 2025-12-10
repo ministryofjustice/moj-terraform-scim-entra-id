@@ -25,7 +25,7 @@ variable "tags" {
 variable "enable_monitoring" {
   type        = bool
   description = "Enable CloudWatch alarms and monitoring for the Lambda function"
-  default     = true
+  default     = false
 }
 
 variable "alarm_email_endpoints" {

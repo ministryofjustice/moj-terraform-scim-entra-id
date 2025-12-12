@@ -66,6 +66,7 @@ module "scim" {
 }
 ```
 
+<!-- markdownlint-disable MD013 MD034 MD060 -->
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
@@ -151,3 +152,4 @@ No modules.
 | <a name="output_lambda_function_name"></a> [lambda\_function\_name](#output\_lambda\_function\_name) | Name of the deployed Lambda function |
 | <a name="output_sns_topic_arn"></a> [sns\_topic\_arn](#output\_sns\_topic\_arn) | ARN of the SNS topic for Lambda alarms (if monitoring is enabled) |
 <!-- END_TF_DOCS -->
+<!-- markdownlint-enable MD013 MD034 MD060 -->

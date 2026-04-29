@@ -2,7 +2,7 @@ autopep8==2.3.2
 black==26.3.1
 flake8==7.3.0
 isort==8.0.1
-mypy==1.20.1
+mypy==1.20.2
 pylint==4.0.5
 unittest2==1.1.0
 mock==5.2.0

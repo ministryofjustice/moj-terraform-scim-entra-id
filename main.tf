@@ -104,7 +104,7 @@ resource "aws_lambda_function" "default" {
   function_name = local.name
   role          = aws_iam_role.default.arn
   handler       = "app.lambda_handler"
-  runtime       = "python3.11"
+  runtime       = "python3.13"
   timeout       = 300
 
   filename         = data.archive_file.function.output_path

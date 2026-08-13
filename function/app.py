@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 import json
 import logging
 import os
@@ -423,7 +424,7 @@ def sync_azure_groups_with_aws(
     return azure_group_members
 
 
-def sync_group_members(  # pylint: disable=R0913,R0912,R0915
+def sync_group_members(  # pylint: disable=R0913,R0912,R0915,R0914
     identity_center_client,
     identity_store_id,
     group_info,
@@ -1016,4 +1017,3 @@ if __name__ == "__main__":
     event = {"dry_run": "True"}
     context = None  # pylint: disable=C0103
     lambda_handler(event, context)
-    

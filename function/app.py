@@ -17,6 +17,9 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 GROUP_PREFIX = "azure-aws-sso-"
 HOLDING_GROUP_NAME = "azure-aws-sso-all-members"
 
+# Domains whose users are synced. Matched case-insensitively.
+ALLOWED_DOMAINS = ("justice.gov.uk", "yjb.gov.uk", "cica.gov.uk")
+
 IGNORED_GROUPS = [
     "azure-aws-sso-analytical-platform-qs-readers",
     "azure-aws-sso-analytical-platform-qs-authors",
@@ -40,9 +43,65 @@ for var in required_env_vars:
         logger.error("Environment variable '%s' is required but not set.", var)
         raise EnvironmentError(f"Missing required environment variable: {var}")
 
-# Cache for storing user and group data
+# Caches. These are module globals and therefore survive between invocations on
+# a warm Lambda container, so lambda_handler clears them at the start of a run.
 user_cache: dict[str, str] = {}
 group_members_cache: dict[str, list[dict]] = {}
+identity_center_users: dict[str, dict] = {}
+
+
+def resolve_upn(member):
+    """
+    Return the real email address for an Entra member.
+
+    B2B guests have a mangled userPrincipalName of the form
+    'Jane.Doe_CICA.GOV.UK#EXT#@JusticeUK.onmicrosoft.com'. Try the decoded
+    UPN, then mail, then the raw UPN, and return the first that sits in an
+    allowed domain. Casing is preserved as Entra reports it.
+
+    Args:
+        member (dict): Graph directoryObject for a user.
+
+    Returns:
+        str: Email address, or empty string if none can be determined.
+    """
+    upn = member.get("userPrincipalName") or ""
+    mail = member.get("mail") or ""
+    candidates = []
+    if "#EXT#" in upn:
+        # rsplit because the local part may itself contain underscores
+        candidates.append("@".join(upn.split("#EXT#")[0].rsplit("_", 1)))
+    candidates += [mail, upn]
+    for candidate in candidates:
+        if candidate and candidate.lower().endswith(ALLOWED_DOMAINS):
+            return candidate
+    return mail or upn
+
+
+def graph_get_all(url, headers, params=None):
+    """
+    GET a Microsoft Graph collection, following @odata.nextLink until exhausted.
+
+    Graph returns at most 100 items per page by default, so a single request
+    silently truncates large group lists and large membership lists.
+
+    Args:
+        url (str): Graph collection endpoint.
+        headers (dict): Request headers, including Authorization.
+        params (dict): Query parameters for the first request only.
+
+    Returns:
+        list: All items across every page.
+    """
+    values = []
+    while url:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        body = response.json()
+        values.extend(body["value"])
+        # nextLink already carries the query string, so params must be dropped
+        url, params = body.get("@odata.nextLink"), None
+    return values
 
 
 def get_identity_store_id(sso_client):
@@ -90,13 +149,12 @@ def get_entraid_aws_groups(access_token):
     Returns:
         list: List of groups.
     """
-    url = "https://graph.microsoft.com/v1.0/groups"
     headers = {"Authorization": f"Bearer {access_token}"}
-    params = {"$filter": f"startswith(displayName, '{GROUP_PREFIX}')"}
-
-    response = requests.get(url, headers=headers, params=params)
-    response.raise_for_status()
-    all_groups = response.json()["value"]
+    all_groups = graph_get_all(
+        "https://graph.microsoft.com/v1.0/groups",
+        headers,
+        {"$filter": f"startswith(displayName, '{GROUP_PREFIX}')"},
+    )
 
     # Filter out ignored groups
     return [group for group in all_groups if group["displayName"] not in IGNORED_GROUPS]
@@ -117,30 +175,52 @@ def get_entraid_group_members(access_token, group_id):
         return group_members_cache[group_id]
 
     headers = {"Authorization": f"Bearer {access_token}"}
+    base_url = f"https://graph.microsoft.com/v1.0/groups/{group_id}"
 
-    # Fetch members
-    url_members = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members"
-    response_members = requests.get(url_members, headers=headers)
-    response_members.raise_for_status()
-    members = response_members.json()["value"]
+    # Fetch members and admins (owners), following pagination
+    members = graph_get_all(f"{base_url}/members", headers)
+    admins = graph_get_all(f"{base_url}/owners", headers)
 
-    # Fetch admins
-    url_admins = f"https://graph.microsoft.com/v1.0/groups/{group_id}/owners"
-    response_admins = requests.get(url_admins, headers=headers)
-    response_admins.raise_for_status()
-    admins = response_admins.json()["value"]
     # raw members and admins
     raw_members = members + admins
-    # filter out non-justice user
+
+    # filter out users outside the allowed domains, resolving B2B guest UPNs
     combined_members = [
         member
         for member in raw_members
-        if member.get("userPrincipalName", "").endswith(
-            ("justice.gov.uk", "yjb.gov.uk")
-        )
+        if resolve_upn(member).lower().endswith(ALLOWED_DOMAINS)
     ]
     group_members_cache[group_id] = combined_members
     return combined_members
+
+
+def load_identity_center_users(identity_center_client, identity_store_id):
+    """
+    Build a lowercase-keyed index of every Identity Center user, once per run.
+
+    Args:
+        identity_center_client: Boto3 client for Identity Center.
+        identity_store_id (str): Identity Store ID.
+
+    Returns:
+        dict: Lowercased UserName -> {"UserId": ..., "UserName": ...}.
+    """
+    if identity_center_users:
+        return identity_center_users
+
+    for page in identity_center_client.get_paginator("list_users").paginate(
+        IdentityStoreId=identity_store_id
+    ):
+        for user in page["Users"]:
+            username = user.get("UserName")
+            if username:
+                identity_center_users[username.lower()] = {
+                    "UserId": user["UserId"],
+                    "UserName": username,
+                }
+
+    logger.info("Indexed %d Identity Center users.", len(identity_center_users))
+    return identity_center_users
 
 
 def get_identity_center_groups_and_relevant_users(
@@ -235,32 +315,19 @@ def get_identity_center_user_id_by_username(
     identity_center_client, identity_store_id, username
 ):
     """
-    Retrieve the user ID associated with a username in AWS Identity Center.
+    Retrieve the user ID for a username, matching case-insensitively.
 
     Args:
         identity_center_client: Boto3 client for Identity Center.
         identity_store_id (str): Identity Store ID.
-        username (str): Username.
+        username (str): Username to look up.
 
     Returns:
         str: User ID or None if the user is not found.
     """
-    if username in user_cache:
-        return user_cache[username]
-
-    try:
-        logger.debug("Fetching user ID for username: %s", username)
-        response = identity_center_client.list_users(
-            IdentityStoreId=identity_store_id,
-            Filters=[{"AttributePath": "UserName", "AttributeValue": username}],
-        )
-        if response["Users"]:
-            user_id = response["Users"][0]["UserId"]
-            user_cache[username] = user_id
-            return user_id
-    except ClientError as e:
-        logger.error("Error getting user ID for username %s: %s", username, e)
-    return None
+    users = load_identity_center_users(identity_center_client, identity_store_id)
+    existing = users.get(username.lower())
+    return existing["UserId"] if existing else None
 
 
 def get_group_membership_id(
@@ -314,11 +381,12 @@ def sync_azure_groups_with_aws(
         dict: Dictionary of Azure group members.
     """
     azure_group_members = {}
+    access_token = get_azure_access_token()
 
     for group in azure_groups:
         group_name = group["displayName"]
         group_id = group["id"]
-        members = get_entraid_group_members(get_azure_access_token(), group_id)
+        members = get_entraid_group_members(access_token, group_id)
         azure_group_members[group_name] = members
 
         if group_name not in aws_groups:
@@ -355,7 +423,7 @@ def sync_azure_groups_with_aws(
     return azure_group_members
 
 
-def sync_group_members(  # pylint: disable=R0913,R0912
+def sync_group_members(  # pylint: disable=R0913,R0912,R0915
     identity_center_client,
     identity_store_id,
     group_info,
@@ -378,10 +446,21 @@ def sync_group_members(  # pylint: disable=R0913,R0912
         holding_group_info (dict): Information about the holding group.
         dry_run (bool): If True, only log the actions without making changes.
     """
+    existing_members = {name.lower() for name in group_info["Members"]}
+    existing_holding = {name.lower() for name in holding_group_info["Members"]}
+
     for member in members:
-        member_name = member["userPrincipalName"]
-        member_given_name = member["givenName"]
-        member_surname = member["surname"]
+        # B2B guests have a mangled UPN, so resolve to the real address
+        member_name = resolve_upn(member)
+        if not member_name:
+            logger.error("Skipping member with no resolvable address: %s", member)
+            continue
+
+        # givenName/surname are null on some directories (e.g. guest accounts).
+        # boto3 rejects None for these fields, so fall back to a non-empty string.
+        display_name = member.get("displayName") or member_name
+        member_given_name = member.get("givenName") or display_name
+        member_surname = member.get("surname") or display_name
 
         logger.debug(
             "Processing member: %s, GivenName: %s, Surname: %s",
@@ -425,6 +504,11 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                         ],
                     )
                     user_id = user_response["UserId"]
+                    # Register immediately so later groups in this run find them
+                    identity_center_users[member_name.lower()] = {
+                        "UserId": user_id,
+                        "UserName": member_name,
+                    }
                     logger.info(
                         "Successfully created new user '%s' with UserId '%s' in AWS Identity Center.",
                         member_name,
@@ -437,8 +521,17 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                         e,
                     )
 
+        # Without a user ID there is nothing to add to any group
+        if not user_id:
+            if not dry_run:
+                logger.error(
+                    "Skipping group membership for '%s' - no Identity Center user ID.",
+                    member_name,
+                )
+            continue
+
         # Add the user to the group if they are not already a member
-        if member_name not in group_info["Members"]:
+        if member_name.lower() not in existing_members:
             if dry_run:
                 logger.info(
                     "[Dry Run] Would add user '%s' to group '%s' in AWS Identity Center.",
@@ -458,12 +551,29 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                         MemberId={"UserId": user_id},
                     )
                     group_info["Members"].add(member_name)
+                    existing_members.add(member_name.lower())
                     logger.info(
                         "Successfully added user '%s' to group '%s' in AWS Identity Center.",
                         member_name,
                         group_name,
                     )
-                except (ClientError, ParamValidationError) as e:
+                except ClientError as e:
+                    if e.response["Error"]["Code"] == "ConflictException":
+                        group_info["Members"].add(member_name)
+                        existing_members.add(member_name.lower())
+                        logger.info(
+                            "User '%s' is already a member of group '%s'.",
+                            member_name,
+                            group_name,
+                        )
+                    else:
+                        logger.error(
+                            "Failed to add user '%s' to group '%s': %s",
+                            member_name,
+                            group_name,
+                            e,
+                        )
+                except ParamValidationError as e:
                     logger.error(
                         "Failed to add user '%s' to group '%s': %s",
                         member_name,
@@ -472,7 +582,7 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                     )
 
         # Ensure the user is added to the holding group
-        if user_id and member_name not in holding_group_info["Members"]:
+        if member_name.lower() not in existing_holding:
             if dry_run:
                 logger.info(
                     "[Dry Run] Would add user '%s' to holding group.", member_name
@@ -486,11 +596,14 @@ def sync_group_members(  # pylint: disable=R0913,R0912
                         MemberId={"UserId": user_id},
                     )
                     holding_group_info["Members"].add(member_name)
+                    existing_holding.add(member_name.lower())
                     logger.info(
                         "Successfully added user '%s' to holding group.", member_name
                     )
                 except ClientError as e:
-                    if e.response["Error"]["Code"] == "EntityAlreadyExistsException":
+                    if e.response["Error"]["Code"] == "ConflictException":
+                        holding_group_info["Members"].add(member_name)
+                        existing_holding.add(member_name.lower())
                         logger.info(
                             "User '%s' is already a member of the holding group.",
                             member_name,
@@ -573,7 +686,9 @@ def remove_members_not_in_azure_groups(  # pylint: disable=R0912,R0914,R0913
             continue  # Skip holding group in all sync aspects other than those related to the holding group itself
 
         if group_name in aws_groups:
-            azure_member_names = {member["userPrincipalName"] for member in members}
+            # Compare case-insensitively - Entra and Identity Center can disagree
+            # on casing, which would otherwise delete and recreate users each run.
+            azure_member_names = {resolve_upn(member).lower() for member in members}
             aws_member_names = aws_groups[group_name]["Members"]
 
             logger.debug(
@@ -581,7 +696,11 @@ def remove_members_not_in_azure_groups(  # pylint: disable=R0912,R0914,R0913
             )
             logger.debug("AWS members for group '%s': %s", group_name, aws_member_names)
 
-            members_to_remove = aws_member_names - azure_member_names
+            members_to_remove = {
+                username
+                for username in aws_member_names
+                if username.lower() not in azure_member_names
+            }
 
             if members_to_remove:
                 logger.debug(
@@ -624,7 +743,7 @@ def remove_members_not_in_azure_groups(  # pylint: disable=R0912,R0914,R0913
                                     IdentityStoreId=identity_store_id,
                                     MembershipId=membership_id,
                                 )
-                                aws_groups[group_name]["Members"].remove(username)
+                                aws_groups[group_name]["Members"].discard(username)
 
                                 # Remove from holding group if the user exists there
                                 holding_membership_id = get_group_membership_id(
@@ -638,7 +757,7 @@ def remove_members_not_in_azure_groups(  # pylint: disable=R0912,R0914,R0913
                                         IdentityStoreId=identity_store_id,
                                         MembershipId=holding_membership_id,
                                     )
-                                    holding_group_info["Members"].remove(username)
+                                    holding_group_info["Members"].discard(username)
                                     logger.info(
                                         "Removed user '%s' from holding group.",
                                         username,
@@ -648,6 +767,8 @@ def remove_members_not_in_azure_groups(  # pylint: disable=R0912,R0914,R0913
                                 identity_center_client.delete_user(
                                     IdentityStoreId=identity_store_id, UserId=user_id
                                 )
+                                identity_center_users.pop(username.lower(), None)
+                                user_cache.pop(user_id, None)
                                 logger.info(
                                     "Deleted user '%s' from Identity Center.", username
                                 )
@@ -700,7 +821,7 @@ def delete_orphaned_aws_users(  # pylint: disable=R0913
     # Create a set of all users who are members of GROUP_PREFIX prefixed groups
     all_group_members = set()
     for group in aws_groups.values():
-        all_group_members.update(group["Members"])
+        all_group_members.update(name.lower() for name in group["Members"])
 
     # Iterate over all relevant users
     for user_id in relevant_users:  # pylint: disable=R1702
@@ -712,10 +833,12 @@ def delete_orphaned_aws_users(  # pylint: disable=R0913
 
             # Log user details for debugging
             logger.debug("Processing user: %s with ID: %s", username, user_id)
-            logger.debug("User's group membership: %s", username in all_group_members)
+            logger.debug(
+                "User's group membership: %s", username.lower() in all_group_members
+            )
 
             # Only consider deletion if the user is not a member of any GROUP_PREFIX prefixed group
-            if username not in all_group_members:
+            if username.lower() not in all_group_members:
                 email_matches = any(
                     email["Type"] == "EntraId" and email["Primary"]
                     for email in user_info["Emails"]
@@ -745,7 +868,7 @@ def delete_orphaned_aws_users(  # pylint: disable=R0913
                                 IdentityStoreId=identity_store_id,
                                 MembershipId=membership_id,
                             )
-                            holding_group_info["Members"].remove(username)
+                            holding_group_info["Members"].discard(username)
                             logger.info(
                                 "Removed user '%s' from holding group.", username
                             )
@@ -757,6 +880,8 @@ def delete_orphaned_aws_users(  # pylint: disable=R0913
                         identity_center_client.delete_user(
                             IdentityStoreId=identity_store_id, UserId=user_id
                         )
+                        identity_center_users.pop(username.lower(), None)
+                        user_cache.pop(user_id, None)
                 else:
                     logger.debug(
                         "Skipping deletion for user '%s' because their email does not match criteria.",
@@ -787,6 +912,11 @@ def lambda_handler(event, context):  # pylint: disable=W0621,W0613
     identity_center_client = boto3.client("identitystore", region_name="eu-west-2")
 
     identity_store_id = get_identity_store_id(sso_client)
+
+    # Warm containers reuse module globals, so start every run from a clean slate
+    user_cache.clear()
+    group_members_cache.clear()
+    identity_center_users.clear()
 
     try:
         logger.info("Starting the sync process...")

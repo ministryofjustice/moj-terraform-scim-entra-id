@@ -33,6 +33,24 @@ def _conflict_error(operation):
     )
 
 
+def _aws_group(members=(), group_id="group_id", name="azure-aws-sso-group1"):
+    """Build an aws_groups dict with a single group and the given members."""
+    return {name: {"GroupId": group_id, "Members": set(members)}}
+
+
+def _holding(members=(), group_id="holding_id"):
+    """Build a holding-group info dict."""
+    return {"GroupId": group_id, "Members": set(members)}
+
+
+def _ic_user(username, email_type="EntraId"):
+    """Build a describe_user response for an Identity Center user."""
+    return {
+        "UserName": username,
+        "Emails": [{"Value": username, "Type": email_type, "Primary": True}],
+    }
+
+
 class TestSyncGroupMembers(unittest.TestCase):
     """Tests for syncing a single group's members into Identity Center."""
 
@@ -373,6 +391,23 @@ class TestRemoveMembersNotInAzureGroups(unittest.TestCase):
         app.identity_center_users.clear()
         app.user_cache.clear()
 
+    @staticmethod
+    def _prune(client, aws_groups, holding, azure_group_members, dry_run=False):
+        remove_members_not_in_azure_groups(
+            client, "store", aws_groups, azure_group_members, holding, dry_run=dry_run
+        )
+
+    def _prune_stale(self, client=None):
+        """Prune the standard single stale member that Azure no longer lists."""
+        client = client or MagicMock()
+        self._prune(
+            client,
+            _aws_group(["stale@justice.gov.uk"]),
+            _holding(),
+            {"azure-aws-sso-group1": []},
+        )
+        return client
+
     @patch("function.app.get_group_membership_id")
     @patch("function.app.get_identity_center_user_id_by_username")
     def test_removes_member_and_deletes_user(self, mock_get_id, mock_membership):
@@ -380,19 +415,13 @@ class TestRemoveMembersNotInAzureGroups(unittest.TestCase):
         # Group membership id, then holding membership id.
         mock_membership.side_effect = ["m_group", "m_holding"]
         client = MagicMock()
-
-        aws_groups = {
-            "azure-aws-sso-group1": {
-                "GroupId": "group_id",
-                "Members": {"stale@justice.gov.uk"},
-            }
-        }
-        holding = {"GroupId": "holding_id", "Members": {"stale@justice.gov.uk"}}
+        aws_groups = _aws_group(["stale@justice.gov.uk"])
         # Azure no longer lists the stale user.
-        azure_group_members = {"azure-aws-sso-group1": [_member("live@justice.gov.uk")]}
-
-        remove_members_not_in_azure_groups(
-            client, "store", aws_groups, azure_group_members, holding, dry_run=False
+        self._prune(
+            client,
+            aws_groups,
+            _holding(["stale@justice.gov.uk"]),
+            {"azure-aws-sso-group1": [_member("live@justice.gov.uk")]},
         )
 
         self.assertEqual(client.delete_group_membership.call_count, 2)
@@ -410,17 +439,12 @@ class TestRemoveMembersNotInAzureGroups(unittest.TestCase):
         mock_membership.return_value = "m_group"
         client = MagicMock()
 
-        aws_groups = {
-            "azure-aws-sso-group1": {
-                "GroupId": "group_id",
-                "Members": {"stale@justice.gov.uk"},
-            }
-        }
-        holding = {"GroupId": "holding_id", "Members": set()}
-        azure_group_members = {"azure-aws-sso-group1": []}
-
-        remove_members_not_in_azure_groups(
-            client, "store", aws_groups, azure_group_members, holding, dry_run=True
+        self._prune(
+            client,
+            _aws_group(["stale@justice.gov.uk"]),
+            _holding(),
+            {"azure-aws-sso-group1": []},
+            dry_run=True,
         )
 
         client.delete_group_membership.assert_not_called()
@@ -429,41 +453,24 @@ class TestRemoveMembersNotInAzureGroups(unittest.TestCase):
     def test_skips_holding_group(self):
         client = MagicMock()
         aws_groups = {HOLDING_GROUP_NAME: {"GroupId": "holding_id", "Members": {"x"}}}
-        holding = {"GroupId": "holding_id", "Members": {"x"}}
-        azure_group_members = {HOLDING_GROUP_NAME: []}
-
-        remove_members_not_in_azure_groups(
-            client, "store", aws_groups, azure_group_members, holding, dry_run=False
-        )
+        self._prune(client, aws_groups, _holding(["x"]), {HOLDING_GROUP_NAME: []})
 
         client.delete_group_membership.assert_not_called()
 
     def test_group_missing_from_aws_is_warned(self):
         client = MagicMock()
-        aws_groups = {}
-        holding = {"GroupId": "holding_id", "Members": set()}
-        azure_group_members = {"azure-aws-sso-group1": [_member()]}
-
-        remove_members_not_in_azure_groups(
-            client, "store", aws_groups, azure_group_members, holding, dry_run=False
-        )
+        self._prune(client, {}, _holding(), {"azure-aws-sso-group1": [_member()]})
 
         client.delete_group_membership.assert_not_called()
 
     @patch("function.app.get_identity_center_user_id_by_username")
     def test_no_members_to_remove(self, mock_get_id):
         client = MagicMock()
-        aws_groups = {
-            "azure-aws-sso-group1": {
-                "GroupId": "group_id",
-                "Members": {"live@justice.gov.uk"},
-            }
-        }
-        holding = {"GroupId": "holding_id", "Members": set()}
-        azure_group_members = {"azure-aws-sso-group1": [_member("live@justice.gov.uk")]}
-
-        remove_members_not_in_azure_groups(
-            client, "store", aws_groups, azure_group_members, holding, dry_run=False
+        self._prune(
+            client,
+            _aws_group(["live@justice.gov.uk"]),
+            _holding(),
+            {"azure-aws-sso-group1": [_member("live@justice.gov.uk")]},
         )
 
         mock_get_id.assert_not_called()
@@ -472,19 +479,7 @@ class TestRemoveMembersNotInAzureGroups(unittest.TestCase):
     @patch("function.app.get_identity_center_user_id_by_username")
     def test_missing_user_id_is_warned(self, mock_get_id):
         mock_get_id.return_value = None
-        client = MagicMock()
-        aws_groups = {
-            "azure-aws-sso-group1": {
-                "GroupId": "group_id",
-                "Members": {"stale@justice.gov.uk"},
-            }
-        }
-        holding = {"GroupId": "holding_id", "Members": set()}
-        azure_group_members = {"azure-aws-sso-group1": []}
-
-        remove_members_not_in_azure_groups(
-            client, "store", aws_groups, azure_group_members, holding, dry_run=False
-        )
+        client = self._prune_stale()
 
         client.delete_group_membership.assert_not_called()
 
@@ -493,19 +488,7 @@ class TestRemoveMembersNotInAzureGroups(unittest.TestCase):
     def test_missing_membership_id_is_warned(self, mock_get_id, mock_membership):
         mock_get_id.return_value = "user_id"
         mock_membership.return_value = None
-        client = MagicMock()
-        aws_groups = {
-            "azure-aws-sso-group1": {
-                "GroupId": "group_id",
-                "Members": {"stale@justice.gov.uk"},
-            }
-        }
-        holding = {"GroupId": "holding_id", "Members": set()}
-        azure_group_members = {"azure-aws-sso-group1": []}
-
-        remove_members_not_in_azure_groups(
-            client, "store", aws_groups, azure_group_members, holding, dry_run=False
-        )
+        client = self._prune_stale()
 
         client.delete_group_membership.assert_not_called()
 
@@ -517,19 +500,7 @@ class TestRemoveMembersNotInAzureGroups(unittest.TestCase):
         mock_get_id.return_value = "user_id"
         # Group membership present; user not in holding group.
         mock_membership.side_effect = ["m_group", None]
-        client = MagicMock()
-        aws_groups = {
-            "azure-aws-sso-group1": {
-                "GroupId": "group_id",
-                "Members": {"stale@justice.gov.uk"},
-            }
-        }
-        holding = {"GroupId": "holding_id", "Members": set()}
-        azure_group_members = {"azure-aws-sso-group1": []}
-
-        remove_members_not_in_azure_groups(
-            client, "store", aws_groups, azure_group_members, holding, dry_run=False
-        )
+        client = self._prune_stale()
 
         client.delete_group_membership.assert_called_once()
         client.delete_user.assert_called_once()
@@ -544,18 +515,7 @@ class TestRemoveMembersNotInAzureGroups(unittest.TestCase):
             {"Error": {"Code": "InternalFailure", "Message": "boom"}},
             "DeleteGroupMembership",
         )
-        aws_groups = {
-            "azure-aws-sso-group1": {
-                "GroupId": "group_id",
-                "Members": {"stale@justice.gov.uk"},
-            }
-        }
-        holding = {"GroupId": "holding_id", "Members": set()}
-        azure_group_members = {"azure-aws-sso-group1": []}
-
-        remove_members_not_in_azure_groups(
-            client, "store", aws_groups, azure_group_members, holding, dry_run=False
-        )
+        self._prune_stale(client)
 
         client.delete_user.assert_not_called()
 
@@ -567,21 +527,22 @@ class TestDeleteOrphanedAwsUsers(unittest.TestCase):
         app.identity_center_users.clear()
         app.user_cache.clear()
 
+    @staticmethod
+    def _delete_orphans(client, aws_groups, holding, dry_run=False):
+        delete_orphaned_aws_users(
+            client, "store", aws_groups, {"user_id"}, holding, dry_run=dry_run
+        )
+
     @patch("function.app.get_group_membership_id")
     def test_deletes_orphan_with_matching_email(self, mock_membership):
         mock_membership.return_value = "m_holding"
         client = MagicMock()
-        client.describe_user.return_value = {
-            "UserName": "orphan@justice.gov.uk",
-            "Emails": [
-                {"Value": "orphan@justice.gov.uk", "Type": "EntraId", "Primary": True}
-            ],
-        }
-        aws_groups = {"azure-aws-sso-group1": {"Members": set()}}
-        holding = {"GroupId": "holding_id", "Members": {"orphan@justice.gov.uk"}}
+        client.describe_user.return_value = _ic_user("orphan@justice.gov.uk")
 
-        delete_orphaned_aws_users(
-            client, "store", aws_groups, {"user_id"}, holding, dry_run=False
+        self._delete_orphans(
+            client,
+            {"azure-aws-sso-group1": {"Members": set()}},
+            _holding(["orphan@justice.gov.uk"]),
         )
 
         client.delete_group_membership.assert_called_once()
@@ -591,34 +552,24 @@ class TestDeleteOrphanedAwsUsers(unittest.TestCase):
 
     def test_keeps_user_still_in_a_group(self):
         client = MagicMock()
-        client.describe_user.return_value = {
-            "UserName": "member@justice.gov.uk",
-            "Emails": [
-                {"Value": "member@justice.gov.uk", "Type": "EntraId", "Primary": True}
-            ],
-        }
-        aws_groups = {"azure-aws-sso-group1": {"Members": {"member@justice.gov.uk"}}}
-        holding = {"GroupId": "holding_id", "Members": set()}
+        client.describe_user.return_value = _ic_user("member@justice.gov.uk")
 
-        delete_orphaned_aws_users(
-            client, "store", aws_groups, {"user_id"}, holding, dry_run=False
+        self._delete_orphans(
+            client,
+            {"azure-aws-sso-group1": {"Members": {"member@justice.gov.uk"}}},
+            _holding(),
         )
 
         client.delete_user.assert_not_called()
 
     def test_keeps_user_without_matching_email(self):
         client = MagicMock()
-        client.describe_user.return_value = {
-            "UserName": "external@justice.gov.uk",
-            "Emails": [
-                {"Value": "external@justice.gov.uk", "Type": "Work", "Primary": True}
-            ],
-        }
-        aws_groups = {"azure-aws-sso-group1": {"Members": set()}}
-        holding = {"GroupId": "holding_id", "Members": set()}
+        client.describe_user.return_value = _ic_user(
+            "external@justice.gov.uk", email_type="Work"
+        )
 
-        delete_orphaned_aws_users(
-            client, "store", aws_groups, {"user_id"}, holding, dry_run=False
+        self._delete_orphans(
+            client, {"azure-aws-sso-group1": {"Members": set()}}, _holding()
         )
 
         client.delete_user.assert_not_called()
@@ -626,17 +577,13 @@ class TestDeleteOrphanedAwsUsers(unittest.TestCase):
     @patch("function.app.get_group_membership_id")
     def test_dry_run_makes_no_changes(self, mock_membership):
         client = MagicMock()
-        client.describe_user.return_value = {
-            "UserName": "orphan@justice.gov.uk",
-            "Emails": [
-                {"Value": "orphan@justice.gov.uk", "Type": "EntraId", "Primary": True}
-            ],
-        }
-        aws_groups = {"azure-aws-sso-group1": {"Members": set()}}
-        holding = {"GroupId": "holding_id", "Members": set()}
+        client.describe_user.return_value = _ic_user("orphan@justice.gov.uk")
 
-        delete_orphaned_aws_users(
-            client, "store", aws_groups, {"user_id"}, holding, dry_run=True
+        self._delete_orphans(
+            client,
+            {"azure-aws-sso-group1": {"Members": set()}},
+            _holding(),
+            dry_run=True,
         )
 
         mock_membership.assert_not_called()
@@ -646,17 +593,10 @@ class TestDeleteOrphanedAwsUsers(unittest.TestCase):
     def test_orphan_not_in_holding_group_still_deleted(self, mock_membership):
         mock_membership.return_value = None
         client = MagicMock()
-        client.describe_user.return_value = {
-            "UserName": "orphan@justice.gov.uk",
-            "Emails": [
-                {"Value": "orphan@justice.gov.uk", "Type": "EntraId", "Primary": True}
-            ],
-        }
-        aws_groups = {"azure-aws-sso-group1": {"Members": set()}}
-        holding = {"GroupId": "holding_id", "Members": set()}
+        client.describe_user.return_value = _ic_user("orphan@justice.gov.uk")
 
-        delete_orphaned_aws_users(
-            client, "store", aws_groups, {"user_id"}, holding, dry_run=False
+        self._delete_orphans(
+            client, {"azure-aws-sso-group1": {"Members": set()}}, _holding()
         )
 
         client.delete_group_membership.assert_not_called()
@@ -668,11 +608,9 @@ class TestDeleteOrphanedAwsUsers(unittest.TestCase):
             {"Error": {"Code": "ResourceNotFoundException", "Message": "no"}},
             "DescribeUser",
         )
-        aws_groups = {"azure-aws-sso-group1": {"Members": set()}}
-        holding = {"GroupId": "holding_id", "Members": set()}
 
-        delete_orphaned_aws_users(
-            client, "store", aws_groups, {"user_id"}, holding, dry_run=False
+        self._delete_orphans(
+            client, {"azure-aws-sso-group1": {"Members": set()}}, _holding()
         )
 
         client.delete_user.assert_not_called()

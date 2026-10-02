@@ -6,7 +6,7 @@ import sys
 import traceback
 
 import boto3
-from pip._vendor import requests
+import requests
 from botocore.exceptions import ClientError, ParamValidationError
 
 # Initialize environment variables
@@ -17,6 +17,9 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 GROUP_PREFIX = "azure-aws-sso-"
 HOLDING_GROUP_NAME = "azure-aws-sso-all-members"
+
+# Timeout (seconds) for outbound HTTP requests, to avoid hanging indefinitely.
+REQUEST_TIMEOUT = 30
 
 # Domains whose users are synced. Matched case-insensitively.
 ALLOWED_DOMAINS = ("justice.gov.uk", "yjb.gov.uk", "cica.gov.uk")
@@ -96,7 +99,9 @@ def graph_get_all(url, headers, params=None):
     """
     values = []
     while url:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(
+            url, headers=headers, params=params, timeout=REQUEST_TIMEOUT
+        )
         response.raise_for_status()
         body = response.json()
         values.extend(body["value"])
@@ -135,7 +140,7 @@ def get_azure_access_token():
         "scope": "https://graph.microsoft.com/.default",
     }
 
-    response = requests.post(url, headers=headers, data=data)
+    response = requests.post(url, headers=headers, data=data, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     return response.json()["access_token"]
 

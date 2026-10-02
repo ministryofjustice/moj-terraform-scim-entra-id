@@ -5,3 +5,13 @@ disable = """
     missing-function-docstring,
     missing-module-docstring
 """
+
+[tool.coverage.run]
+source = ["function.app"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]

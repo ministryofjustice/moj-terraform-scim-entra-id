@@ -21,6 +21,11 @@ todo.txt
 venv/
 entra-id-scim/
 
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
 # function code
 
 **/function.zip

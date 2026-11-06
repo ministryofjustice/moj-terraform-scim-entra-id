@@ -40,7 +40,9 @@ jobs:
 
       - name: Run unit tests and log output
         run: |
-          set -e  # Ensure the script fails if the tests fail
+          # pipefail is required: without it the pipeline returns tee's exit
+          # code, so a failing test run piped into tee would still pass.
+          set -eo pipefail
           python -m unittest discover -s "function/tests/unit" 2>&1 | tee "unit-test-results.log"
         continue-on-error: false # Ensure the job fails if the tests do not run
 
@@ -53,7 +55,9 @@ jobs:
 
       - name: Run integration tests and log output
         run: |
-          set -e  # Ensure the script fails if the tests fail
+          # pipefail is required: without it the pipeline returns tee's exit
+          # code, so a failing test run piped into tee would still pass.
+          set -eo pipefail
           python -m unittest discover -s "function/tests/integration" 2>&1 | tee "integration-test-results.log"
         continue-on-error: false # Ensure the job fails if the tests do not run
 
